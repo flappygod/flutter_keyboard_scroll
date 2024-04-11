@@ -156,6 +156,15 @@
     CGRect endFrame            = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     CGRect startFrame            = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
     double duration             = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+
+    //硬件键盘
+    if(startFrame.origin.y==endFrame.origin.y){
+        if(endFrame.size.height==0){
+            [self keyboardWillHideNotification:notification];
+        }
+        return;
+    }
+
     if(startFrame.origin.y<endFrame.origin.y){
         [self keyboardWillHideNotification:notification];
     }else{
@@ -172,13 +181,16 @@
     double duration             = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
     UIViewAnimationCurve keyboardTransitionAnimationCurve=[[notification.userInfo valueForKey:UIKeyboardAnimationCurveUserInfoKey] intValue];
 
+
+    CGFloat height = endFrame.size.height;
+
     //send show notification
     if(_eventDic==nil){
         _eventDic=[[NSMutableDictionary alloc] init];
     }
     _eventDic[@"type"]=[NSNumber numberWithInt:2];
     _eventDic[@"former"]=@"0.00";
-    _eventDic[@"newer"]=[NSString stringWithFormat:@"%.2f",endFrame.size.height];
+    _eventDic[@"newer"]=[NSString stringWithFormat:@"%.2f",height];
     _eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
     _eventSink(_eventDic);
 
@@ -193,7 +205,7 @@
                               delay:0
                             options:keyboardTransitionAnimationCurve << 16
                          animations:^{
-            safeSelf.frameView.frame = CGRectMake(-1, 0 ,1,endFrame.size.height);
+            safeSelf.frameView.frame = CGRectMake(-1, 0 ,1,height);
         } completion:^(BOOL finished) {
             [safeSelf showDisplayLink:nil];
             [safeSelf.showLink setPaused:true];
