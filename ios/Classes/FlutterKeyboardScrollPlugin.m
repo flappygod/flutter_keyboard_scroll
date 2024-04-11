@@ -161,6 +161,8 @@
     if(startFrame.origin.y==endFrame.origin.y){
         if(endFrame.size.height==0){
             [self keyboardWillHideNotification:notification];
+        }else{
+            [self keyboardWillShowNotification:notification];
         }
         return;
     }
@@ -178,11 +180,17 @@
 {
 
     CGRect endFrame            = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    CGRect startFrame            = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
     double duration             = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
     UIViewAnimationCurve keyboardTransitionAnimationCurve=[[notification.userInfo valueForKey:UIKeyboardAnimationCurveUserInfoKey] intValue];
 
 
     CGFloat height = endFrame.size.height;
+    
+    if(startFrame.origin.y==endFrame.origin.y){
+        height=0;
+    }
+    
 
     //send show notification
     if(_eventDic==nil){
