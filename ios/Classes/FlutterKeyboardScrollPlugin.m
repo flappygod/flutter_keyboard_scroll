@@ -27,21 +27,21 @@
 }
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
     FlutterMethodChannel* channel = [FlutterMethodChannel
-                                     methodChannelWithName:@"keyboard_observer"
-                                     binaryMessenger:[registrar messenger]];
-    
+            methodChannelWithName:@"keyboard_observer"
+                  binaryMessenger:[registrar messenger]];
+
     //create eventChannel
     FlutterEventChannel* eventChannel=[FlutterEventChannel eventChannelWithName:@"keyboard_observer_event"
                                                                 binaryMessenger:[registrar messenger]];
     //init
     FlutterKeyboardScrollPlugin* instance = [[FlutterKeyboardScrollPlugin alloc] init];
-    
+
     //set eventChannel
     instance.eventChannel=eventChannel;
-    
+
     //set Handler
     [instance.eventChannel setStreamHandler:instance];
-    
+
     //set delegate
     [registrar addMethodCallDelegate:instance channel:channel];
 }
@@ -155,15 +155,9 @@
 -(void)keyboardFrameChangeNotification:(NSNotification *)notification{
     CGRect endFrame            = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     CGRect startFrame            = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
-    double duration             = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
 
     //硬件键盘
     if(startFrame.origin.y==endFrame.origin.y){
-        if(endFrame.size.height==0){
-            [self keyboardWillHideNotification:notification];
-        }else{
-            [self keyboardWillShowNotification:notification];
-        }
         return;
     }
 
@@ -186,11 +180,11 @@
 
 
     CGFloat height = endFrame.size.height;
-    
+
     if(startFrame.origin.y==endFrame.origin.y){
         height=0;
     }
-    
+
 
     //send show notification
     if(_eventDic==nil){
@@ -213,11 +207,11 @@
                               delay:0
                             options:keyboardTransitionAnimationCurve << 16
                          animations:^{
-            safeSelf.frameView.frame = CGRectMake(-1, 0 ,1,height);
-        } completion:^(BOOL finished) {
-            [safeSelf showDisplayLink:nil];
-            [safeSelf.showLink setPaused:true];
-        }];
+                             safeSelf.frameView.frame = CGRectMake(-1, 0 ,1,height);
+                         } completion:^(BOOL finished) {
+                    [safeSelf showDisplayLink:nil];
+                    [safeSelf.showLink setPaused:true];
+                }];
     }
 }
 
@@ -249,11 +243,11 @@
                               delay:0
                             options:keyboardTransitionAnimationCurve << 16
                          animations:^{
-            safeSelf.frameView.frame = CGRectMake(-1, 0 , 1, 0);
-        } completion:^(BOOL finished) {
-            [safeSelf hideDisplayLink:nil];
-            [safeSelf.hideLink setPaused:true];
-        }];
+                             safeSelf.frameView.frame = CGRectMake(-1, 0 , 1, 0);
+                         } completion:^(BOOL finished) {
+                    [safeSelf hideDisplayLink:nil];
+                    [safeSelf.hideLink setPaused:true];
+                }];
     }
 }
 
@@ -279,7 +273,7 @@
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    
+
 }
 
 @end
