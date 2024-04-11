@@ -1,3 +1,3 @@
-## 1.0.2
+## 1.0.3
 
-* compact keyboard hardware,add show notification with height 0;
+* compact keyboard hardware,;
