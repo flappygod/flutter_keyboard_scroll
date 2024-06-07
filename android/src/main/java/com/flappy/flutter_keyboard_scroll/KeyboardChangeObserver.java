@@ -1,4 +1,4 @@
-package android.src.main.java.com.flappy.flutter_keyboard_scroll;
+package com.flappy.flutter_keyboard_scroll;
 
 import android.content.res.Resources;
 import android.view.ViewTreeObserver;
