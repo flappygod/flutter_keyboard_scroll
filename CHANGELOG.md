@@ -1,3 +1,3 @@
-## 1.0.3
+## 1.0.4
 
-* compact keyboard hardware,;
+* fix bugs in android when soft navigation bar show;
