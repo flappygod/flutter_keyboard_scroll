@@ -1,4 +1,4 @@
-package com.flappy.flutter_keyboard_scroll;
+package android.src.main.java.com.flappy.flutter_keyboard_scroll;
 
 import android.app.Activity;
 
@@ -30,7 +30,7 @@ public class FlutterKeyboardScrollPlugin implements FlutterPlugin, MethodCallHan
   private Activity activity;
 
   //listener
-  private KeyboardChangeListener keyboardChangeListener;
+  private KeyboardChangeObserver keyboardChangeListener;
 
   //event sink
   private EventChannel.EventSink eventSink;
@@ -87,7 +87,7 @@ public class FlutterKeyboardScrollPlugin implements FlutterPlugin, MethodCallHan
   void setActivity(ActivityPluginBinding binding) {
     if (binding != null) {
       activity = binding.getActivity();
-      keyboardChangeListener = new KeyboardChangeListener(activity);
+      keyboardChangeListener = new KeyboardChangeObserver(activity);
       keyboardChangeListener.setKeyboardListener(new KeyboardListener() {
         private int keyboardHeight;
 

@@ -1,4 +1,4 @@
-package com.flappy.flutter_keyboard_scroll;
+package android.src.main.java.com.flappy.flutter_keyboard_scroll;
 
 public interface KeyboardListener {
     /**
