@@ -63,19 +63,45 @@
 }
 
 
-//init frame view
--(void)initFrameView{
-    //get root controller
-    UIViewController* root=[[UIApplication sharedApplication].keyWindow rootViewController];
-    //top controller
-    UIViewController *topController = [self _topViewController:root];
-    //create frame view
-    _frameView  = [[UIView alloc]initWithFrame:CGRectMake(0,
-                                                          0,
-                                                          1,
-                                                          0)];
-    //add frame view
+-(void)initFrameView {
+    // Get the active window scene
+    UIWindowScene *windowScene = [self activeWindowScene];
+    if (!windowScene) {
+        return;
+    }
+
+    // Get the top controller
+    UIViewController *topController = [self _topViewController:windowScene.windows.firstObject.rootViewController];
+
+    // Create and configure frame view
+    _frameView = [[UIView alloc] initWithFrame:CGRectZero];
+
+    // Add frame view to the top controller's view
     [topController.view addSubview:_frameView];
+}
+
+// Helper method to find the active window scene
+- (UIWindowScene *)activeWindowScene {
+    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+        if (scene.activationState == UISceneActivationStateForegroundActive) {
+            return (UIWindowScene *)scene;
+        }
+    }
+    return nil;
+}
+
+// Helper method to find the top view controller
+- (UIViewController *)_topViewController:(UIViewController *)rootViewController {
+    if (rootViewController.presentedViewController == nil) {
+        return rootViewController;
+    }
+    if ([rootViewController.presentedViewController isKindOfClass:[UINavigationController class]]) {
+        UINavigationController *navigationController = (UINavigationController *)rootViewController.presentedViewController;
+        UIViewController *lastViewController = [[navigationController viewControllers] lastObject];
+        return [self _topViewController:lastViewController];
+    }
+    UIViewController *presentedViewController = (UIViewController *)rootViewController.presentedViewController;
+    return [self _topViewController:presentedViewController];
 }
 
 //disposeFrameView
@@ -84,17 +110,6 @@
     _frameView=nil;
 }
 
-//get top
-- (UIViewController *)_topViewController:(UIViewController *)vc {
-    if ([vc isKindOfClass:[UINavigationController class]]) {
-        return [self _topViewController:[(UINavigationController *)vc topViewController]];
-    } else if ([vc isKindOfClass:[UITabBarController class]]) {
-        return [self _topViewController:[(UITabBarController *)vc selectedViewController]];
-    } else {
-        return vc;
-    }
-    return nil;
-}
 
 
 //create display link
@@ -161,10 +176,13 @@
         return;
     }
 
-    if(startFrame.origin.y<endFrame.origin.y){
-        [self keyboardWillHideNotification:notification];
-    }else{
+    // 获取主屏幕的bounds
+    CGRect screenBounds = [[UIScreen mainScreen] bounds];
+    CGFloat screenHeight = screenBounds.size.height;
+    if(endFrame.origin.y<screenHeight-5){
         [self keyboardWillShowNotification:notification];
+    }else{
+        [self keyboardWillHideNotification:notification];
     }
 }
 
