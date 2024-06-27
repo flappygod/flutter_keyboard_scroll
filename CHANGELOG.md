@@ -1,3 +1,3 @@
-## 1.0.5
+## 1.0.6
 
-* fix bugs in android when soft navigation bar show;
+* fix bugs in ios when keyboard show and dismiss;
