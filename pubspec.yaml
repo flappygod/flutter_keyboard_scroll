@@ -1,6 +1,6 @@
 name: flutter_keyboard_scroll
 description: "A plugin for keyboard show listen."
-version: 1.0.6
+version: 1.0.7
 homepage: https://github.com/flappygod/flutter_keyboard_scroll
 
 environment:

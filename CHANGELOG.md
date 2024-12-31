@@ -1,3 +1,3 @@
-## 1.0.6
+## 1.0.7
 
-* fix bugs in ios when keyboard show and dismiss;
+* Performance optimization during animation execution.
