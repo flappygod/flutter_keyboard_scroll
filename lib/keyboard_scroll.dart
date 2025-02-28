@@ -333,8 +333,8 @@ class _KeyboardScrollState extends State<KeyboardScroll>
 
   @override
   Widget build(BuildContext context) {
-    bool isAnimating = (inAnimation?.isAnimating ?? false) ||
-        (outAnimation?.isAnimating ?? false);
+    bool isAnimating = (inController?.isAnimating ?? false) ||
+        (outController?.isAnimating ?? false);
     //just filter btn
     if (widget.scrollType == KeyboardScrollType.fitJustBottom) {
       return KeyboardObserver(
