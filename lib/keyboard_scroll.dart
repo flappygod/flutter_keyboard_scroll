@@ -58,6 +58,8 @@ class KeyboardScrollController {
 
   double _formerEnd = 0;
 
+  bool _enabled = true;
+
   //wrapper
   final List<TextFieldWrapper> _wrappers = [];
 
@@ -106,6 +108,10 @@ class KeyboardScrollController {
       }
     }
     return smaller ?? 0;
+  }
+
+  void setEnable(bool flag) {
+    _enabled = flag;
   }
 }
 
@@ -339,16 +345,25 @@ class _KeyboardScrollState extends State<KeyboardScroll>
     if (widget.scrollType == KeyboardScrollType.fitJustBottom) {
       return KeyboardObserver(
         showListener: (former, newer, time) {
+          if (!widget.controller._enabled) {
+            return;
+          }
           if (widget.showListener != null) {
             widget.showListener!(former, newer, time);
           }
         },
         hideListener: (former, newer, time) {
+          if (!widget.controller._enabled) {
+            return;
+          }
           if (widget.hideListener != null) {
             widget.hideListener!(former, newer, time);
           }
         },
         showAnimationListener: (value, end) {
+          if (!widget.controller._enabled) {
+            return;
+          }
           if (widget.showAnimationListener != null) {
             widget.showAnimationListener!(value, end);
           }
@@ -356,6 +371,9 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           setState(() {});
         },
         hideAnimationListener: (value, end) {
+          if (!widget.controller._enabled) {
+            return;
+          }
           if (widget.hideAnimationListener != null) {
             widget.hideAnimationListener!(value, end);
           }
@@ -395,23 +413,35 @@ class _KeyboardScrollState extends State<KeyboardScroll>
       //filter all textField
       return KeyboardObserver(
         showListener: (former, newer, time) {
+          if (!widget.controller._enabled) {
+            return;
+          }
           if (widget.showListener != null) {
             widget.showListener!(former, newer, time);
           }
           _changeUserControlHeight(newer);
         },
         hideListener: (former, newer, time) {
+          if (!widget.controller._enabled) {
+            return;
+          }
           if (widget.hideListener != null) {
             widget.hideListener!(former, newer, time);
           }
           _changeUserControlHeight(newer);
         },
         showAnimationListener: (value, end) {
+          if (!widget.controller._enabled) {
+            return;
+          }
           if (widget.showAnimationListener != null) {
             widget.showAnimationListener!(value, end);
           }
         },
         hideAnimationListener: (value, end) {
+          if (!widget.controller._enabled) {
+            return;
+          }
           if (widget.hideAnimationListener != null) {
             widget.hideAnimationListener!(value, end);
           }

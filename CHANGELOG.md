@@ -1,3 +1,3 @@
-## 1.0.8
+## 1.0.9
 
-* Bugs fixed.
+* Add enabled to avoid scroll when keyboard show 
