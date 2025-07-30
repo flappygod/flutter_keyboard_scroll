@@ -1,3 +1,3 @@
-## 1.0.9
+## 1.0.10
 
-* Add enabled to avoid scroll when keyboard show 
+* Fix bugs upper android 15.
