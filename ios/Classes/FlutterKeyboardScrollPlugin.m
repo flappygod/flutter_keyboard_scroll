@@ -85,6 +85,22 @@
         eventDic[@"newer"]=[NSString stringWithFormat:@"%.2f",keyboardHeight];
         eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
         eventSink(eventDic);
+        
+        if(weakSelf.frameView!=nil){
+            [weakSelf.frameView.layer removeAllAnimations];
+            [weakSelf.showLink setPaused:false];
+            [weakSelf.hideLink setPaused:true];
+            [UIView animateWithDuration:420
+                                  delay:0
+                                options:UIViewAnimationOptionCurveLinear
+                             animations:^{
+                weakSelf.frameView.frame = CGRectMake(-1, 0 ,1,keyboardHeight);
+            } completion:^(BOOL finished) {
+                [weakSelf showDisplayLink:nil];
+                [weakSelf.showLink setPaused:true];
+            }];
+        }
+        
     });
 }
 
