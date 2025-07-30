@@ -2,6 +2,7 @@ package com.flappy.flutter_keyboard_scroll;
 
 import android.content.res.Resources;
 import android.view.ViewTreeObserver;
+import android.view.WindowInsets;
 import android.content.Context;
 import android.graphics.Point;
 import android.graphics.Rect;
@@ -9,6 +10,7 @@ import android.app.Activity;
 import android.view.Display;
 import android.view.Window;
 import android.view.View;
+import android.os.Build;
 import android.util.Log;
 
 /******
@@ -74,28 +76,64 @@ class KeyboardChangeObserver implements ViewTreeObserver.OnGlobalLayoutListener 
             return;
         }
 
-        //获取屏幕高度
-        Rect rect = new Rect();
-        mWindow.getDecorView().getWindowVisibleDisplayFrame(rect);
-        int screenHeight = getScreenHeight();
-
-        //计算离底部的高度
-        int keyboardHeight = screenHeight - rect.bottom;
-
-        //底部软键盘高度
-        if (keyboardHeight < MIN_KEYBOARD_HEIGHT || keyboardHeight == getNavigationBarHeight(mContentView.getContext())) {
-            softBottomHeight = keyboardHeight;
-        }
-
         //减去软键盘高度
-        keyboardHeight = keyboardHeight - softBottomHeight;
-
+        int keyboardHeight = getKeyboardHeightExcludingNavBar(mWindow.getDecorView());
 
         //通知高度变化
         if (mKeyboardListener != null) {
             mKeyboardListener.onKeyboardChange((keyboardHeight > 0), keyboardHeight);
         }
     }
+
+
+    //获取屏幕高度
+    private int getBottomHeight() {
+        Rect rect = new Rect();
+        mWindow.getDecorView().getWindowVisibleDisplayFrame(rect);
+        return rect.bottom;
+    }
+
+    /******
+     * 获取软键盘高度排除导航栏高度
+     * @return 屏幕高度
+     */
+    public int getKeyboardHeightExcludingNavBar(View rootView) {
+
+        ///Android 15上存在一些莫名其妙的问题
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            //获取 WindowInsets
+            WindowInsets insets = rootView.getRootWindowInsets();
+            if (insets != null) {
+                //计算纯粹的软键盘高度
+                return insets.getInsets(WindowInsets.Type.ime()).bottom;
+            }
+        }
+
+        ///Android 14及以下上存在一些莫名其妙的问题
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // 获取 WindowInsets
+            WindowInsets insets = rootView.getRootWindowInsets();
+            if (insets != null) {
+                //获取软键盘高度（可能包含导航栏高度）
+                int imeHeight = insets.getInsets(WindowInsets.Type.ime()).bottom;
+                //获取导航栏高度
+                int navBarHeight = insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
+                //计算纯粹的软键盘高度
+                return imeHeight - navBarHeight;
+            }
+        }
+
+        //屏幕高度减去了距离底部的insets高度
+        int keyboardHeight = getScreenHeight() - getBottomHeight();
+        //底部导航栏的高度
+        if (keyboardHeight < MIN_KEYBOARD_HEIGHT || keyboardHeight == getNavigationBarHeight(mContentView.getContext())) {
+            softBottomHeight = keyboardHeight;
+        }
+        //减去软键盘高度
+        keyboardHeight = keyboardHeight - softBottomHeight;
+        return keyboardHeight;
+    }
+
 
     /******
      * 获取屏幕高度
