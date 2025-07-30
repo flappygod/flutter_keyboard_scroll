@@ -30,21 +30,21 @@
 }
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
     FlutterMethodChannel* channel = [FlutterMethodChannel
-            methodChannelWithName:@"keyboard_observer"
-                  binaryMessenger:[registrar messenger]];
-
+                                     methodChannelWithName:@"keyboard_observer"
+                                     binaryMessenger:[registrar messenger]];
+    
     //create eventChannel
     FlutterEventChannel* eventChannel=[FlutterEventChannel eventChannelWithName:@"keyboard_observer_event"
                                                                 binaryMessenger:[registrar messenger]];
     //init
     FlutterKeyboardScrollPlugin* instance = [[FlutterKeyboardScrollPlugin alloc] init];
-
+    
     //set eventChannel
     instance.eventChannel=eventChannel;
-
+    
     //set Handler
     [instance.eventChannel setStreamHandler:instance];
-
+    
     //set delegate
     [registrar addMethodCallDelegate:instance channel:channel];
 }
@@ -74,32 +74,91 @@
 - (void)applicationWillEnterForeground {
     // 应用返回前台，设置标志为 YES
     self.isAppInForeground = YES;
+    
+    __weak typeof(self) weakSelf = self;
+    __weak typeof(_eventDic) eventDic = _eventDic;
+    __weak typeof(_eventSink) eventSink = _eventSink;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        CGFloat keyboardHeight = [weakSelf getCurrentKeyboardHeight];
+        eventDic[@"type"]=[NSNumber numberWithInt:2];
+        eventDic[@"former"]=[NSString stringWithFormat:@"%.2f",keyboardHeight];
+        eventDic[@"newer"]=[NSString stringWithFormat:@"%.2f",keyboardHeight];
+        eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
+        eventSink(eventDic);
+    });
+}
+
+///软键盘高度获取
+- (CGFloat)getCurrentKeyboardHeight {
+    // 遍历所有连接的场景（适配 iOS 13+）
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if (scene.activationState == UISceneActivationStateForegroundActive) {
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                for (UIWindow *window in windowScene.windows) {
+                    CGFloat keyboardHeight = [self findKeyboardHeightInView:window];
+                    if (keyboardHeight > 0) {
+                        return keyboardHeight;
+                    }
+                }
+            }
+        }
+    } else {
+        // iOS 13 以下使用 keyWindow
+        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+        return [self findKeyboardHeightInView:keyWindow];
+    }
+    return 0;
+}
+
+// 递归查找键盘视图并获取高度
+- (CGFloat)findKeyboardHeightInView:(UIView *)view {
+    for (UIView *subview in view.subviews) {
+        // 判断是否为键盘视图
+        if ([NSStringFromClass([subview class]) containsString:@"Keyboard"]) {
+            return subview.frame.size.height;
+        }
+        // 递归查找子视图
+        CGFloat keyboardHeight = [self findKeyboardHeightInView:subview];
+        if (keyboardHeight > 0) {
+            return keyboardHeight;
+        }
+    }
+    return 0;
 }
 
 
--(void)initFrameView {
-    // Get the active window scene
-    UIWindowScene *windowScene = [self activeWindowScene];
-    if (!windowScene) {
+- (void)initFrameView {
+    UIWindow *activeWindow = [self activeWindow];
+    if (!activeWindow) {
         return;
     }
-
-    // Get the top controller
-    UIViewController *topController = [self _topViewController:windowScene.windows.firstObject.rootViewController];
-
-    // Create and configure frame view
+    
+    // 获取顶层控制器
+    UIViewController *topController = [self _topViewController:activeWindow.rootViewController];
+    
+    // 创建并配置 frameView
     _frameView = [[UIView alloc] initWithFrame:CGRectZero];
-
-    // Add frame view to the top controller's view
+    
+    // 将 frameView 添加到顶层控制器的视图中
     [topController.view addSubview:_frameView];
 }
 
-// Helper method to find the active window scene
-- (UIWindowScene *)activeWindowScene {
-    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-        if (scene.activationState == UISceneActivationStateForegroundActive) {
-            return (UIWindowScene *)scene;
+
+
+- (UIWindow *)activeWindow {
+    if (@available(iOS 13.0, *)) {
+        // iOS 13+ 使用 UIScene
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if (scene.activationState == UISceneActivationStateForegroundActive &&
+                [scene isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                return windowScene.windows.firstObject;
+            }
         }
+    } else {
+        // iOS 13 以下使用 keyWindow
+        return [UIApplication sharedApplication].keyWindow;
     }
     return nil;
 }
@@ -182,21 +241,21 @@
 }
 
 -(void)keyboardFrameChangeNotification:(NSNotification *)notification{
-
+    
     // 检查标志变量
     if (!self.isAppInForeground) {
         // 应用在后台，直接返回
         return;
     }
-
+    
     CGRect endFrame            = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     CGRect startFrame            = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
-
+    
     //硬件键盘
     if(startFrame.origin.y==endFrame.origin.y){
         return;
     }
-
+    
     // 获取主屏幕的bounds
     CGRect screenBounds = [[UIScreen mainScreen] bounds];
     CGFloat screenHeight = screenBounds.size.height;
@@ -211,20 +270,20 @@
 //keyboard notificationsl
 - (void)keyboardWillShowNotification:(NSNotification *)notification
 {
-
+    
     CGRect endFrame            = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     CGRect startFrame            = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
     double duration             = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
     UIViewAnimationCurve keyboardTransitionAnimationCurve=[[notification.userInfo valueForKey:UIKeyboardAnimationCurveUserInfoKey] intValue];
-
-
+    
+    
     CGFloat height = endFrame.size.height;
-
+    
     if(startFrame.origin.y==endFrame.origin.y){
         height=0;
     }
-
-
+    
+    
     //send show notification
     if(_eventDic==nil){
         _eventDic=[[NSMutableDictionary alloc] init];
@@ -234,7 +293,7 @@
     _eventDic[@"newer"]=[NSString stringWithFormat:@"%.2f",height];
     _eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
     _eventSink(_eventDic);
-
+    
     if(_frameView!=nil){
         //remove former animation
         [self.frameView.layer removeAllAnimations];
@@ -246,11 +305,11 @@
                               delay:0
                             options:keyboardTransitionAnimationCurve << 16
                          animations:^{
-                             safeSelf.frameView.frame = CGRectMake(-1, 0 ,1,height);
-                         } completion:^(BOOL finished) {
-                    [safeSelf showDisplayLink:nil];
-                    [safeSelf.showLink setPaused:true];
-                }];
+            safeSelf.frameView.frame = CGRectMake(-1, 0 ,1,height);
+        } completion:^(BOOL finished) {
+            [safeSelf showDisplayLink:nil];
+            [safeSelf.showLink setPaused:true];
+        }];
     }
 }
 
@@ -260,7 +319,7 @@
     CGRect endFrame            = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     double duration             = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
     UIViewAnimationCurve keyboardTransitionAnimationCurve=[[notification.userInfo valueForKey:UIKeyboardAnimationCurveUserInfoKey] intValue];
-
+    
     //send hide notification
     if(_eventDic==nil){
         _eventDic=[[NSMutableDictionary alloc] init];
@@ -270,7 +329,7 @@
     _eventDic[@"newer"]=@"0.00";
     _eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
     _eventSink(_eventDic);
-
+    
     if(_frameView!=nil){
         //remove former animation
         [self.frameView.layer removeAllAnimations];
@@ -282,11 +341,11 @@
                               delay:0
                             options:keyboardTransitionAnimationCurve << 16
                          animations:^{
-                             safeSelf.frameView.frame = CGRectMake(-1, 0 , 1, 0);
-                         } completion:^(BOOL finished) {
-                    [safeSelf hideDisplayLink:nil];
-                    [safeSelf.hideLink setPaused:true];
-                }];
+            safeSelf.frameView.frame = CGRectMake(-1, 0 , 1, 0);
+        } completion:^(BOOL finished) {
+            [safeSelf hideDisplayLink:nil];
+            [safeSelf.hideLink setPaused:true];
+        }];
     }
 }
 
@@ -295,17 +354,17 @@
 - (FlutterError* _Nullable)onListenWithArguments:(id _Nullable)arguments
                                        eventSink:(FlutterEventSink)events {
     _eventSink=events;
-
-
+    
+    
     // 初始化标志变量
     self.isAppInForeground = YES;
-
+    
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(keyboardFrameChangeNotification:)
                                                  name:UIKeyboardWillChangeFrameNotification
                                                object:nil];
-
-
+    
+    
     // 添加应用生命周期监听
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(applicationDidEnterBackground)
@@ -315,7 +374,7 @@
                                              selector:@selector(applicationWillEnterForeground)
                                                  name:UIApplicationWillEnterForegroundNotification
                                                object:nil];
-
+    
     return nil;
 }
 
@@ -325,7 +384,7 @@
     [[NSNotificationCenter defaultCenter] removeObserver:self
                                                     name:UIKeyboardWillChangeFrameNotification
                                                   object:nil];
-
+    
     // 移除应用生命周期监听
     [[NSNotificationCenter defaultCenter] removeObserver:self
                                                     name:UIApplicationDidEnterBackgroundNotification
@@ -337,7 +396,7 @@
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-
+    
 }
 
 @end
