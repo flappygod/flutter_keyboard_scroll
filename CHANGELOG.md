@@ -1,3 +1,3 @@
-## 1.0.11
+## 1.0.12
 
-* Fix bugs for ios when jump to other applications.
+* Fix bugs for ios when change keyboard type outside app.
