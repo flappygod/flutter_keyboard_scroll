@@ -18,6 +18,9 @@
 //hide link
 @property(nonatomic,strong) CADisplayLink* hideLink;
 
+// 标志变量：标记应用是否在前台
+@property(nonatomic, assign) BOOL isAppInForeground;
+
 @end
 
 
@@ -60,6 +63,17 @@
     }else{
         result(FlutterMethodNotImplemented);
     }
+}
+
+#pragma mark - Application Lifecycle
+- (void)applicationDidEnterBackground {
+    // 应用进入后台，设置标志为 NO
+    self.isAppInForeground = NO;
+}
+
+- (void)applicationWillEnterForeground {
+    // 应用返回前台，设置标志为 YES
+    self.isAppInForeground = YES;
 }
 
 
@@ -168,6 +182,13 @@
 }
 
 -(void)keyboardFrameChangeNotification:(NSNotification *)notification{
+
+    // 检查标志变量
+    if (!self.isAppInForeground) {
+        // 应用在后台，直接返回
+        return;
+    }
+
     CGRect endFrame            = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     CGRect startFrame            = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
 
@@ -274,10 +295,27 @@
 - (FlutterError* _Nullable)onListenWithArguments:(id _Nullable)arguments
                                        eventSink:(FlutterEventSink)events {
     _eventSink=events;
+
+
+    // 初始化标志变量
+    self.isAppInForeground = YES;
+
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(keyboardFrameChangeNotification:)
                                                  name:UIKeyboardWillChangeFrameNotification
                                                object:nil];
+
+
+    // 添加应用生命周期监听
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(applicationDidEnterBackground)
+                                                 name:UIApplicationDidEnterBackgroundNotification
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(applicationWillEnterForeground)
+                                                 name:UIApplicationWillEnterForegroundNotification
+                                               object:nil];
+
     return nil;
 }
 
@@ -286,6 +324,14 @@
     _eventSink=nil;
     [[NSNotificationCenter defaultCenter] removeObserver:self
                                                     name:UIKeyboardWillChangeFrameNotification
+                                                  object:nil];
+
+    // 移除应用生命周期监听
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                    name:UIApplicationDidEnterBackgroundNotification
+                                                  object:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                    name:UIApplicationWillEnterForegroundNotification
                                                   object:nil];
     return nil;
 }
