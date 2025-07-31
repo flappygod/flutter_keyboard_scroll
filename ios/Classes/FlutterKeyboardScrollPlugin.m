@@ -165,22 +165,29 @@
 // 获取当前的 activeWindow
 - (UIWindow *)activeWindow {
     if (@available(iOS 13.0, *)) {
-        // iOS 13+ 使用 UIScene
+        // iOS 13+ using UIScene
         for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
             if (scene.activationState == UISceneActivationStateForegroundActive &&
                 [scene isKindOfClass:[UIWindowScene class]]) {
                 UIWindowScene *windowScene = (UIWindowScene *)scene;
+                // Look for the key window
                 for (UIWindow *window in windowScene.windows) {
                     if (window.isKeyWindow) {
                         return window;
                     }
                 }
+                // Fallback: Return the first window if no keyWindow is found
+                if (windowScene.windows.count > 0) {
+                    return windowScene.windows.firstObject;
+                }
             }
         }
     } else {
-        // iOS 13 以下使用 keyWindow
+        // iOS 12 and below using keyWindow
         return [UIApplication sharedApplication].keyWindow;
     }
+    // Log a warning if no active window is found
+    NSLog(@"Warning: No active window found!");
     return nil;
 }
 
