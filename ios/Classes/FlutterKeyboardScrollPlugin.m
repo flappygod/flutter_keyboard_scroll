@@ -86,7 +86,7 @@
     __weak typeof(self) weakSelf = self;
     __weak typeof(_eventSink) eventSink = _eventSink;
     
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         
         //高度不变不执行
         CGFloat keyboardHeight = [weakSelf getCurrentKeyboardHeight];
@@ -115,7 +115,7 @@
                 UIWindowScene *windowScene = (UIWindowScene *)scene;
                 for (UIWindow *window in windowScene.windows) {
                     CGFloat keyboardHeight = [self findKeyboardHeightInView:window];
-                    if (keyboardHeight > 0) {
+                    if (keyboardHeight > 120) {
                         return keyboardHeight;
                     }
                 }
