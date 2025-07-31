@@ -90,9 +90,6 @@
         
         //高度不变不执行
         CGFloat keyboardHeight = [weakSelf getCurrentKeyboardHeight];
-        if(weakSelf.cacheKeyboardHeight==keyboardHeight){
-            return;
-        }
         
         //进行通知
         NSMutableDictionary* eventDic = [[NSMutableDictionary alloc] init];
@@ -111,11 +108,25 @@
 
 ///软键盘高度获取
 - (CGFloat)getCurrentKeyboardHeight {
-    UIWindow *keyWindow = [self activeWindow];
-    if (!keyWindow) {
-        return 0;
+    // 遍历所有连接的场景（适配 iOS 13+）
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if (scene.activationState == UISceneActivationStateForegroundActive) {
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                for (UIWindow *window in windowScene.windows) {
+                    CGFloat keyboardHeight = [self findKeyboardHeightInView:window];
+                    if (keyboardHeight > 0) {
+                        return keyboardHeight;
+                    }
+                }
+            }
+        }
+    } else {
+        // iOS 13 以下使用 keyWindow
+        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+        return [self findKeyboardHeightInView:keyWindow];
     }
-    return [self findKeyboardHeightInView:keyWindow];
+    return 0;
 }
 
 // 递归查找键盘视图并获取高度
