@@ -21,13 +21,17 @@
 // 标志变量：标记应用是否在前台
 @property(nonatomic, assign) BOOL isAppInForeground;
 
+//缓存的软键盘高度
+@property(nonatomic, assign) CGFloat cacheKeyboardHeight;
+
 @end
 
 
 @implementation FlutterKeyboardScrollPlugin
 {
-    NSMutableDictionary* _eventDic;
+    NSMutableDictionary* _animationEventDic;
 }
+
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
     FlutterMethodChannel* channel = [FlutterMethodChannel
                                      methodChannelWithName:@"keyboard_observer"
@@ -69,62 +73,49 @@
 - (void)applicationDidEnterBackground {
     // 应用进入后台，设置标志为 NO
     self.isAppInForeground = NO;
+    
+    //进入后台前缓存当前的软键盘高度
+    self.cacheKeyboardHeight = [self getCurrentKeyboardHeight];
 }
 
 - (void)applicationWillEnterForeground {
-    // 应用返回前台，设置标志为 YES
+    //应用返回前台，设置标志为 YES
     self.isAppInForeground = YES;
     
+    //弱引用
     __weak typeof(self) weakSelf = self;
-    __weak typeof(_eventDic) eventDic = _eventDic;
     __weak typeof(_eventSink) eventSink = _eventSink;
+    
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        
+        //高度不变不执行
         CGFloat keyboardHeight = [weakSelf getCurrentKeyboardHeight];
+        if(weakSelf.cacheKeyboardHeight==keyboardHeight){
+            return;
+        }
+        
+        //进行通知
+        NSMutableDictionary* eventDic = [[NSMutableDictionary alloc] init];
         eventDic[@"type"]=[NSNumber numberWithInt:2];
-        eventDic[@"former"]=[NSString stringWithFormat:@"%.2f",keyboardHeight];
+        eventDic[@"former"]=[NSString stringWithFormat:@"%.2f",weakSelf.cacheKeyboardHeight];
         eventDic[@"newer"]=[NSString stringWithFormat:@"%.2f",keyboardHeight];
         eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
         eventSink(eventDic);
         
-        if(weakSelf.frameView!=nil){
-            [weakSelf.frameView.layer removeAllAnimations];
-            [weakSelf.showLink setPaused:false];
-            [weakSelf.hideLink setPaused:true];
-            [UIView animateWithDuration:420
-                                  delay:0
-                                options:UIViewAnimationOptionCurveLinear
-                             animations:^{
-                weakSelf.frameView.frame = CGRectMake(-1, 0 ,1,keyboardHeight);
-            } completion:^(BOOL finished) {
-                [weakSelf showDisplayLink:nil];
-                [weakSelf.showLink setPaused:true];
-            }];
-        }
-        
+        //执行
+        [weakSelf keyboardWillShowAnimation:keyboardHeight
+                                andDuration:420
+                                   andCurve:UIViewAnimationOptionCurveLinear];
     });
 }
 
 ///软键盘高度获取
 - (CGFloat)getCurrentKeyboardHeight {
-    // 遍历所有连接的场景（适配 iOS 13+）
-    if (@available(iOS 13.0, *)) {
-        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-            if (scene.activationState == UISceneActivationStateForegroundActive) {
-                UIWindowScene *windowScene = (UIWindowScene *)scene;
-                for (UIWindow *window in windowScene.windows) {
-                    CGFloat keyboardHeight = [self findKeyboardHeightInView:window];
-                    if (keyboardHeight > 0) {
-                        return keyboardHeight;
-                    }
-                }
-            }
-        }
-    } else {
-        // iOS 13 以下使用 keyWindow
-        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
-        return [self findKeyboardHeightInView:keyWindow];
+    UIWindow *keyWindow = [self activeWindow];
+    if (!keyWindow) {
+        return 0;
     }
-    return 0;
+    return [self findKeyboardHeightInView:keyWindow];
 }
 
 // 递归查找键盘视图并获取高度
@@ -144,24 +135,23 @@
 }
 
 
+// 创建一个frameView用于软键盘弹出的动画
 - (void)initFrameView {
-    UIWindow *activeWindow = [self activeWindow];
-    if (!activeWindow) {
+    UIWindow *keyWindow = [self activeWindow];
+    if (!keyWindow) {
         return;
     }
-    
-    // 获取顶层控制器
-    UIViewController *topController = [self _topViewController:activeWindow.rootViewController];
-    
+    //获取顶层控制器
+    UIViewController *topController = [self _topViewController:keyWindow.rootViewController];
     // 创建并配置 frameView
     _frameView = [[UIView alloc] initWithFrame:CGRectZero];
     
-    // 将 frameView 添加到顶层控制器的视图中
+    //将frameView 添加到顶层控制器的视图中
     [topController.view addSubview:_frameView];
 }
 
 
-
+// 获取当前的 activeWindow
 - (UIWindow *)activeWindow {
     if (@available(iOS 13.0, *)) {
         // iOS 13+ 使用 UIScene
@@ -169,7 +159,11 @@
             if (scene.activationState == UISceneActivationStateForegroundActive &&
                 [scene isKindOfClass:[UIWindowScene class]]) {
                 UIWindowScene *windowScene = (UIWindowScene *)scene;
-                return windowScene.windows.firstObject;
+                for (UIWindow *window in windowScene.windows) {
+                    if (window.isKeyWindow) {
+                        return window;
+                    }
+                }
             }
         }
     } else {
@@ -198,8 +192,6 @@
     [_frameView removeFromSuperview];
     _frameView=nil;
 }
-
-
 
 //create display link
 - (void)createDisplayLink
@@ -230,30 +222,30 @@
 //handle event for view
 - (void)showDisplayLink:(CADisplayLink *)displayLink
 {
-    //do something
-    if(_frameView!=nil&&_eventSink!=nil){
-        if(_eventDic==nil){
-            _eventDic=[[NSMutableDictionary alloc] init];
-        }
-        _eventDic[@"type"]=[NSNumber numberWithInt:1];
-        _eventDic[@"data"]=[NSString stringWithFormat:@"%.2f",_frameView.layer.presentationLayer.frame.size.height];
-        _eventDic[@"end"]=[NSNumber numberWithBool:(displayLink==nil)];
-        _eventSink(_eventDic);
+    if(_frameView==nil||_eventSink==nil||!_frameView.layer.presentationLayer){
+        return;
     }
+    if(_animationEventDic==nil){
+        _animationEventDic=[[NSMutableDictionary alloc] init];
+    }
+    _animationEventDic[@"type"]=[NSNumber numberWithInt:1];
+    _animationEventDic[@"data"]=[NSString stringWithFormat:@"%.2f",_frameView.layer.presentationLayer.frame.size.height];
+    _animationEventDic[@"end"]=[NSNumber numberWithBool:(displayLink==nil)];
+    _eventSink(_animationEventDic);
 }
 
 -(void)hideDisplayLink:(CADisplayLink *)displayLink
 {
-    //do something
-    if(_frameView!=nil&&_eventSink!=nil){
-        if(_eventDic==nil){
-            _eventDic=[[NSMutableDictionary alloc] init];
-        }
-        _eventDic[@"type"]=[NSNumber numberWithInt:0];
-        _eventDic[@"data"]=[NSString stringWithFormat:@"%.2f",_frameView.layer.presentationLayer.frame.size.height];
-        _eventDic[@"end"]=[NSNumber numberWithBool:(displayLink==nil)];
-        _eventSink(_eventDic);
+    if(_frameView==nil||_eventSink==nil||!_frameView.layer.presentationLayer){
+        return;
     }
+    if(_animationEventDic==nil){
+        _animationEventDic=[[NSMutableDictionary alloc] init];
+    }
+    _animationEventDic[@"type"]=[NSNumber numberWithInt:0];
+    _animationEventDic[@"data"]=[NSString stringWithFormat:@"%.2f",_frameView.layer.presentationLayer.frame.size.height];
+    _animationEventDic[@"end"]=[NSNumber numberWithBool:(displayLink==nil)];
+    _eventSink(_animationEventDic);
 }
 
 -(void)keyboardFrameChangeNotification:(NSNotification *)notification{
@@ -267,8 +259,8 @@
     CGRect endFrame            = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     CGRect startFrame            = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
     
-    //硬件键盘
-    if(startFrame.origin.y==endFrame.origin.y){
+    //基本相等
+    if (fabs(startFrame.origin.y - endFrame.origin.y) < 0.1) {
         return;
     }
     
@@ -283,7 +275,7 @@
 }
 
 
-//keyboard notificationsl
+//软键盘弹出
 - (void)keyboardWillShowNotification:(NSNotification *)notification
 {
     
@@ -291,45 +283,52 @@
     CGRect startFrame            = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
     double duration             = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
     UIViewAnimationCurve keyboardTransitionAnimationCurve=[[notification.userInfo valueForKey:UIKeyboardAnimationCurveUserInfoKey] intValue];
-    
-    
     CGFloat height = endFrame.size.height;
     
-    if(startFrame.origin.y==endFrame.origin.y){
+    
+    //基本相等
+    if (fabs(startFrame.origin.y - endFrame.origin.y) < 0.1) {
         height=0;
     }
     
+    NSMutableDictionary*   eventDic=[[NSMutableDictionary alloc] init];
+    eventDic[@"type"]=[NSNumber numberWithInt:2];
+    eventDic[@"former"]=@"0.00";
+    eventDic[@"newer"]=[NSString stringWithFormat:@"%.2f",height];
+    eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
+    _eventSink(eventDic);
     
-    //send show notification
-    if(_eventDic==nil){
-        _eventDic=[[NSMutableDictionary alloc] init];
-    }
-    _eventDic[@"type"]=[NSNumber numberWithInt:2];
-    _eventDic[@"former"]=@"0.00";
-    _eventDic[@"newer"]=[NSString stringWithFormat:@"%.2f",height];
-    _eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
-    _eventSink(_eventDic);
-    
-    if(_frameView!=nil){
-        //remove former animation
-        [self.frameView.layer removeAllAnimations];
-        //set paused false
-        [self.showLink setPaused:false];
-        [self.hideLink setPaused:true];
-        __weak typeof(self) safeSelf=self;
-        [UIView animateWithDuration:duration
-                              delay:0
-                            options:keyboardTransitionAnimationCurve << 16
-                         animations:^{
-            safeSelf.frameView.frame = CGRectMake(-1, 0 ,1,height);
-        } completion:^(BOOL finished) {
-            [safeSelf showDisplayLink:nil];
-            [safeSelf.showLink setPaused:true];
-        }];
-    }
+    UIViewAnimationOptions options = keyboardTransitionAnimationCurve << 16;
+    [self keyboardWillShowAnimation:height
+                        andDuration:duration
+                           andCurve:options];
 }
 
-//hide keyboard notifications
+
+// 软键盘弹出动画模拟回调
+-(void)keyboardWillShowAnimation:(CGFloat)height
+                     andDuration:(NSTimeInterval)duration
+                        andCurve:(UIViewAnimationOptions)options{
+    if(self.frameView==nil){
+        return;
+    }
+    [self.frameView.layer removeAllAnimations];
+    [self.showLink setPaused:false];
+    [self.hideLink setPaused:true];
+    __weak typeof(self) safeSelf=self;
+    [UIView animateWithDuration:duration
+                          delay:0
+                        options:options
+                     animations:^{
+        safeSelf.frameView.frame = CGRectMake(-1, 0 ,1,height);
+    } completion:^(BOOL finished) {
+        [safeSelf showDisplayLink:nil];
+        [safeSelf.showLink setPaused:true];
+    }];
+}
+
+
+//软键盘隐藏
 - (void)keyboardWillHideNotification:(NSNotification *)notification
 {
     CGRect endFrame            = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
@@ -337,32 +336,40 @@
     UIViewAnimationCurve keyboardTransitionAnimationCurve=[[notification.userInfo valueForKey:UIKeyboardAnimationCurveUserInfoKey] intValue];
     
     //send hide notification
-    if(_eventDic==nil){
-        _eventDic=[[NSMutableDictionary alloc] init];
-    }
-    _eventDic[@"type"]=[NSNumber numberWithInt:3];
-    _eventDic[@"former"]=[NSString stringWithFormat:@"%.2f",endFrame.size.height];
-    _eventDic[@"newer"]=@"0.00";
-    _eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
-    _eventSink(_eventDic);
+    NSMutableDictionary*   eventDic=[[NSMutableDictionary alloc] init];
+    eventDic[@"type"]=[NSNumber numberWithInt:3];
+    eventDic[@"former"]=[NSString stringWithFormat:@"%.2f",endFrame.size.height];
+    eventDic[@"newer"]=@"0.00";
+    eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
+    _eventSink(eventDic);
     
-    if(_frameView!=nil){
-        //remove former animation
-        [self.frameView.layer removeAllAnimations];
-        //set paused false
-        [self.hideLink setPaused:false];
-        [self.showLink setPaused:true];
-        __weak typeof(self) safeSelf=self;
-        [UIView animateWithDuration:duration
-                              delay:0
-                            options:keyboardTransitionAnimationCurve << 16
-                         animations:^{
-            safeSelf.frameView.frame = CGRectMake(-1, 0 , 1, 0);
-        } completion:^(BOOL finished) {
-            [safeSelf hideDisplayLink:nil];
-            [safeSelf.hideLink setPaused:true];
-        }];
+    UIViewAnimationOptions options = keyboardTransitionAnimationCurve << 16;
+    [self keyboardWillHideAnimation:0
+                        andDuration:duration
+                           andCurve:options];
+}
+
+
+// 软键盘弹出动画模拟回调
+-(void)keyboardWillHideAnimation:(CGFloat)height
+                     andDuration:(NSTimeInterval)duration
+                        andCurve:(UIViewAnimationOptions)options{
+    if(self.frameView==nil){
+        return;
     }
+    [self.frameView.layer removeAllAnimations];
+    [self.hideLink setPaused:false];
+    [self.showLink setPaused:true];
+    __weak typeof(self) safeSelf=self;
+    [UIView animateWithDuration:duration
+                          delay:0
+                        options:options
+                     animations:^{
+        safeSelf.frameView.frame = CGRectMake(-1, 0 , 1, height);
+    } completion:^(BOOL finished) {
+        [safeSelf hideDisplayLink:nil];
+        [safeSelf.hideLink setPaused:true];
+    }];
 }
 
 
