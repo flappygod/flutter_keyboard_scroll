@@ -91,6 +91,11 @@
         //高度不变不执行
         CGFloat keyboardHeight = [weakSelf getCurrentKeyboardHeight];
         
+        //没有就不执行吧
+        if(keyboardHeight==0){
+            return;
+        }
+        
         //进行通知
         NSMutableDictionary* eventDic = [[NSMutableDictionary alloc] init];
         eventDic[@"type"]=[NSNumber numberWithInt:2];
