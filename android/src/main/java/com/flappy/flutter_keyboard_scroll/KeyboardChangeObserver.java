@@ -100,7 +100,7 @@ class KeyboardChangeObserver implements ViewTreeObserver.OnGlobalLayoutListener 
     public int getKeyboardHeightExcludingNavBar(View rootView) {
 
         ///Android 15上存在一些莫名其妙的问题
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (Build.VERSION.SDK_INT >= 35) {
             //获取 WindowInsets
             WindowInsets insets = rootView.getRootWindowInsets();
             if (insets != null) {
