@@ -1,3 +1,3 @@
-## 1.0.13
+## 1.0.14
 
-* Fix bugs for ios when change keyboard type outside app.
+* Improve the code for better performance, readability, and maintainability.
