@@ -1,3 +1,3 @@
-## 1.0.17
+## 1.0.18
 
 * Add fitAddedText to ignore un add text filed affect.
