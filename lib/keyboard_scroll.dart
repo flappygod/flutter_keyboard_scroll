@@ -276,7 +276,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
       double? bottomNearest = widget.controller.getBottomNeedMargin();
       double bottomMargin = currentKeyboardHeight;
       double bottomNeed = ((bottomMargin - (bottomNearest ?? 0)) < 0 ||
-              (bottomNearest == 0 && onlyAddedField))
+              (bottomNearest == null && onlyAddedField))
           ? 0
           : (bottomMargin - (bottomNearest ?? 0));
       if (widget.controller._formerEnd != bottomNeed) {
@@ -302,7 +302,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
       double? bottomNearest = widget.controller.getBottomNeedMargin();
       double bottomMargin = newer;
       double bottomNeed = ((bottomMargin - (bottomNearest ?? 0)) < 0 ||
-              (bottomNearest == 0 && onlyAddedField))
+              (bottomNearest == null && onlyAddedField))
           ? 0
           : (bottomMargin - (bottomNearest ?? 0));
       if (widget.controller._formerEnd != bottomNeed) {
