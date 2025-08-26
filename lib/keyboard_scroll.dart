@@ -273,11 +273,12 @@ class _KeyboardScrollState extends State<KeyboardScroll>
   //text focused height change
   void _refreshUserControlHeight(bool onlyAddedField) {
     if (mounted) {
-      double bottomNearest = widget.controller.getBottomNeedMargin() ?? 0;
+      double? bottomNearest = widget.controller.getBottomNeedMargin();
       double bottomMargin = currentKeyboardHeight;
-      double bottomNeed = ((bottomMargin - bottomNearest) < 0 && onlyAddedField)
+      double bottomNeed = ((bottomMargin - (bottomNearest ?? 0)) < 0 ||
+              (bottomNearest == 0 && onlyAddedField))
           ? 0
-          : (bottomMargin - bottomNearest);
+          : (bottomMargin - (bottomNearest ?? 0));
       if (widget.controller._formerEnd != bottomNeed) {
         double newValue = bottomNeed;
         widget.controller._formerEnd = newValue;
@@ -298,11 +299,12 @@ class _KeyboardScrollState extends State<KeyboardScroll>
   void _changeUserControlHeight(double newer, bool onlyAddedField) {
     if (mounted) {
       currentKeyboardHeight = newer;
-      double bottomNearest = widget.controller.getBottomNeedMargin() ?? 0;
+      double? bottomNearest = widget.controller.getBottomNeedMargin();
       double bottomMargin = newer;
-      double bottomNeed = ((bottomMargin - bottomNearest) < 0 && onlyAddedField)
+      double bottomNeed = ((bottomMargin - (bottomNearest ?? 0)) < 0 ||
+              (bottomNearest == 0 && onlyAddedField))
           ? 0
-          : (bottomMargin - bottomNearest);
+          : (bottomMargin - (bottomNearest ?? 0));
       if (widget.controller._formerEnd != bottomNeed) {
         double newValue = bottomNeed;
         widget.controller._formerEnd = newValue;
