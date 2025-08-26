@@ -219,12 +219,13 @@ class _KeyboardScrollState extends State<KeyboardScroll>
 
   //init controller
   void _initController() {
-    if (widget.scrollType == KeyboardScrollType.fitEveryText) {
+    if (widget.scrollType != KeyboardScrollType.fitJustBottom) {
       //set listener
       widget.controller.setFocusListener((focusNode) {
         if (focusNode.hasFocus) {
           _refreshUserControlHeight(
-              widget.scrollType == KeyboardScrollType.fitAddedText);
+            widget.scrollType == KeyboardScrollType.fitAddedText,
+          );
         }
       });
       widget.controller.refreshHeights();
