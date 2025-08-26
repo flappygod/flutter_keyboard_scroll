@@ -1,3 +1,3 @@
-## 1.0.16
+## 1.0.17
 
-* Improve the code for better performance, readability, and maintainability.
+* Add fitAddedText to ignore un add text filed affect.

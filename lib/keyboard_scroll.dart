@@ -98,7 +98,7 @@ class KeyboardScrollController {
   }
 
   //get bottom margin
-  double getBottomNeedMargin() {
+  double? getBottomNeedMargin() {
     double? smaller;
     for (int s = 0; s < _wrappers.length; s++) {
       if (smaller == null || smaller > _wrappers[s].getBottom()) {
@@ -107,7 +107,7 @@ class KeyboardScrollController {
         }
       }
     }
-    return smaller ?? 0;
+    return smaller;
   }
 
   void setEnable(bool flag) {
@@ -121,6 +121,8 @@ enum KeyboardScrollType {
   fitJustBottom,
   //each text
   fitEveryText,
+  //each text
+  fitAddedText,
 }
 
 //KeyBroadScroll widget
@@ -221,7 +223,8 @@ class _KeyboardScrollState extends State<KeyboardScroll>
       //set listener
       widget.controller.setFocusListener((focusNode) {
         if (focusNode.hasFocus) {
-          _refreshUserControlHeight();
+          _refreshUserControlHeight(
+              widget.scrollType == KeyboardScrollType.fitAddedText);
         }
       });
       widget.controller.refreshHeights();
@@ -267,9 +270,14 @@ class _KeyboardScrollState extends State<KeyboardScroll>
   }
 
   //text focused height change
-  void _refreshUserControlHeight() {
+  void _refreshUserControlHeight(bool onlyAddedField) {
     if (mounted) {
-      double bottomNearest = widget.controller.getBottomNeedMargin();
+      double? bottomNearest = widget.controller.getBottomNeedMargin();
+      if (bottomNearest == null && onlyAddedField) {
+        return;
+      } else {
+        bottomNearest ??= 0;
+      }
       double bottomMargin = currentKeyboardHeight;
       double bottomNeed = (bottomMargin - bottomNearest) < 0
           ? 0
@@ -291,10 +299,15 @@ class _KeyboardScrollState extends State<KeyboardScroll>
   }
 
   //text focused height change
-  void _changeUserControlHeight(double newer) {
+  void _changeUserControlHeight(double newer, bool onlyAddedField) {
     if (mounted) {
       currentKeyboardHeight = newer;
-      double bottomNearest = widget.controller.getBottomNeedMargin();
+      double? bottomNearest = widget.controller.getBottomNeedMargin();
+      if (bottomNearest == null && onlyAddedField) {
+        return;
+      } else {
+        bottomNearest ??= 0;
+      }
       double bottomMargin = newer;
       double bottomNeed = (bottomMargin - bottomNearest) < 0
           ? 0
@@ -341,8 +354,8 @@ class _KeyboardScrollState extends State<KeyboardScroll>
   Widget build(BuildContext context) {
     bool isAnimating = (inController?.isAnimating ?? false) ||
         (outController?.isAnimating ?? false);
-    //just filter btn
     if (widget.scrollType == KeyboardScrollType.fitJustBottom) {
+      ///filter just bottom
       return KeyboardObserver(
         showListener: (former, newer, time) {
           if (!widget.controller._enabled) {
@@ -410,7 +423,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
         ),
       );
     } else {
-      //filter all textField
+      ///filter text field
       return KeyboardObserver(
         showListener: (former, newer, time) {
           if (!widget.controller._enabled) {
@@ -419,7 +432,10 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           if (widget.showListener != null) {
             widget.showListener!(former, newer, time);
           }
-          _changeUserControlHeight(newer);
+          _changeUserControlHeight(
+            newer,
+            widget.scrollType == KeyboardScrollType.fitAddedText,
+          );
         },
         hideListener: (former, newer, time) {
           if (!widget.controller._enabled) {
@@ -428,7 +444,10 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           if (widget.hideListener != null) {
             widget.hideListener!(former, newer, time);
           }
-          _changeUserControlHeight(newer);
+          _changeUserControlHeight(
+            newer,
+            widget.scrollType == KeyboardScrollType.fitAddedText,
+          );
         },
         showAnimationListener: (value, end) {
           if (!widget.controller._enabled) {
