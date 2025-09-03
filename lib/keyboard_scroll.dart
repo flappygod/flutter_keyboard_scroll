@@ -54,6 +54,7 @@ class TextFieldWrapper {
 
 //controller
 class KeyboardScrollController {
+  //当前的
   double _nowValue = 0;
 
   double _formerEnd = 0;
@@ -110,23 +111,27 @@ class KeyboardScrollController {
     return smaller;
   }
 
+  //set enable
   void setEnable(bool flag) {
     _enabled = flag;
+  }
+
+  //get enable
+  bool isEnable() {
+    return _enabled;
   }
 }
 
 //type
 enum KeyboardScrollType {
-  //just bottom
-  fitJustBottom,
-  //each text
-  fitEveryText,
+  //all view
+  fitAllView,
   //each text
   fitAddedText,
 }
 
 //KeyBroadScroll widget
-class KeyboardScroll extends StatefulWidget {
+class KeyboardScrollView extends StatefulWidget {
   //close when tap
   final bool closeWhenTap;
 
@@ -157,14 +162,14 @@ class KeyboardScroll extends StatefulWidget {
   //animation listener
   final KeyboardAnimationListener? hideAnimationListener;
 
-  const KeyboardScroll({
+  const KeyboardScrollView({
     Key? key,
     required this.controller,
     required this.child,
     this.closeWhenTap = false,
     this.closeWhenMove = false,
     this.useIOSSystemAnim = false,
-    this.scrollType = KeyboardScrollType.fitEveryText,
+    this.scrollType = KeyboardScrollType.fitAddedText,
     this.showListener,
     this.hideListener,
     this.showAnimationListener,
@@ -173,12 +178,12 @@ class KeyboardScroll extends StatefulWidget {
 
   @override
   State<StatefulWidget> createState() {
-    return _KeyboardScrollState();
+    return _KeyboardScrollViewState();
   }
 }
 
 //state
-class _KeyboardScrollState extends State<KeyboardScroll>
+class _KeyboardScrollViewState extends State<KeyboardScrollView>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   //out animation
   AnimationController? outController;
@@ -204,6 +209,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
   //check moved or not
   bool isMoved = false;
 
+  //position
   Offset? position;
 
   @override
@@ -212,30 +218,29 @@ class _KeyboardScrollState extends State<KeyboardScroll>
     initOutAnim();
     initInAnim();
     WidgetsBinding.instance.addPostFrameCallback((callback) {
+      widget.controller.refreshHeights();
       _initController();
     });
     WidgetsBinding.instance.addObserver(this);
   }
 
-  //init controller
+  ///init controller
   void _initController() {
-    if (widget.scrollType != KeyboardScrollType.fitJustBottom) {
-      //set listener
+    if (widget.scrollType != KeyboardScrollType.fitAllView) {
       widget.controller.setFocusListener((focusNode) {
         if (focusNode.hasFocus) {
-          _refreshUserControlHeight(
-            widget.scrollType == KeyboardScrollType.fitAddedText,
-          );
+          _refreshUserControlHeight();
         }
       });
-      widget.controller.refreshHeights();
     }
   }
 
   @override
-  void didUpdateWidget(KeyboardScroll old) {
+  void didUpdateWidget(KeyboardScrollView old) {
     super.didUpdateWidget(old);
-    //widget.controller.refreshHeights();
+    WidgetsBinding.instance.addPostFrameCallback((callback) {
+      widget.controller.refreshHeights();
+    });
   }
 
   @override
@@ -246,7 +251,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
     super.dispose();
   }
 
-  //out animation
+  ///out animation
   void initOutAnim() {
     _outListener = () {
       if (outAnimation != null) {
@@ -258,7 +263,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
         duration: const Duration(milliseconds: 250), vsync: this);
   }
 
-  //in animation
+  ///in animation
   void initInAnim() {
     _inListener = () {
       if (inAnimation != null) {
@@ -270,58 +275,44 @@ class _KeyboardScrollState extends State<KeyboardScroll>
         duration: const Duration(milliseconds: 250), vsync: this);
   }
 
-  //text focused height change
-  void _refreshUserControlHeight(bool onlyAddedField) {
-    if (mounted) {
-      double? bottomNearest = widget.controller.getBottomNeedMargin();
-      double bottomMargin = currentKeyboardHeight;
-      double bottomNeed = ((bottomMargin - (bottomNearest ?? 0)) < 0 ||
-              (bottomNearest == null && onlyAddedField))
-          ? 0
-          : (bottomMargin - (bottomNearest ?? 0));
-      if (widget.controller._formerEnd != bottomNeed) {
-        double newValue = bottomNeed;
-        widget.controller._formerEnd = newValue;
-        if (widget.controller._nowValue > newValue) {
-          _createOutAnim(widget.controller._nowValue, newValue);
-          outController!.reset();
-          outController!.forward();
-        } else {
-          _createInAnim(widget.controller._nowValue, newValue);
-          inController!.reset();
-          inController!.forward();
-        }
+  ///text focused height change
+  void _refreshUserControlHeight() {
+    if (!mounted) {
+      return;
+    }
+    bool onlyAddedField =
+        (widget.scrollType == KeyboardScrollType.fitAddedText);
+    double? bottomNearest = widget.controller.getBottomNeedMargin();
+    double bottomMargin = currentKeyboardHeight;
+    double bottomNeed = (bottomNearest == null && onlyAddedField) ||
+            (bottomMargin <= (bottomNearest ?? 0))
+        ? 0
+        : (bottomMargin - (bottomNearest ?? 0));
+    if (widget.controller._formerEnd != bottomNeed) {
+      double newValue = bottomNeed;
+      widget.controller._formerEnd = newValue;
+      if (widget.controller._nowValue > newValue) {
+        _createOutAnim(widget.controller._nowValue, newValue);
+        outController!.reset();
+        outController!.forward();
+      } else {
+        _createInAnim(widget.controller._nowValue, newValue);
+        inController!.reset();
+        inController!.forward();
       }
     }
   }
 
-  //text focused height change
-  void _changeUserControlHeight(double newer, bool onlyAddedField) {
-    if (mounted) {
-      currentKeyboardHeight = newer;
-      double? bottomNearest = widget.controller.getBottomNeedMargin();
-      double bottomMargin = newer;
-      double bottomNeed = ((bottomMargin - (bottomNearest ?? 0)) < 0 ||
-              (bottomNearest == null && onlyAddedField))
-          ? 0
-          : (bottomMargin - (bottomNearest ?? 0));
-      if (widget.controller._formerEnd != bottomNeed) {
-        double newValue = bottomNeed;
-        widget.controller._formerEnd = newValue;
-        if (widget.controller._nowValue > newValue) {
-          _createOutAnim(widget.controller._nowValue, newValue);
-          outController!.reset();
-          outController!.forward();
-        } else {
-          _createInAnim(widget.controller._nowValue, newValue);
-          inController!.reset();
-          inController!.forward();
-        }
-      }
+  ///text focused height change
+  void _changeUserControlHeight(double newer) {
+    if (!mounted) {
+      return;
     }
+    currentKeyboardHeight = newer;
+    _refreshUserControlHeight();
   }
 
-  //out animation
+  ///out animation
   void _createOutAnim(double former, double newValue) {
     inAnimation?.removeListener(_inListener!);
     outAnimation?.removeListener(_outListener!);
@@ -333,7 +324,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
     outAnimation!.addListener(_outListener!);
   }
 
-  //in animation
+  ///in animation
   void _createInAnim(double former, double newValue) {
     inAnimation?.removeListener(_inListener!);
     outAnimation?.removeListener(_outListener!);
@@ -345,9 +336,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
 
   @override
   Widget build(BuildContext context) {
-    bool isAnimating = (inController?.isAnimating ?? false) ||
-        (outController?.isAnimating ?? false);
-    if (widget.scrollType == KeyboardScrollType.fitJustBottom) {
+    if (widget.scrollType == KeyboardScrollType.fitAllView) {
       ///filter just bottom
       return KeyboardObserver(
         showListener: (former, newer, time) {
@@ -387,33 +376,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           setState(() {});
         },
         useIOSSystemAnim: widget.useIOSSystemAnim,
-        child: Listener(
-          onPointerMove: (data) {
-            position ??= data.position;
-            if (position?.dy.toInt() != data.position.dy.toInt() ||
-                position?.dx.toInt() != data.position.dx.toInt()) {
-              position = data.position;
-              isMoved = true;
-            }
-            if (widget.closeWhenMove && isMoved) {
-              FocusScope.of(context).requestFocus(FocusNode());
-            }
-          },
-          onPointerDown: (data) {
-            isMoved = false;
-            position = null;
-          },
-          onPointerUp: (data) {
-            if (widget.closeWhenTap && isMoved == false) {
-              FocusScope.of(context).requestFocus(FocusNode());
-            }
-          },
-          child: Transform.translate(
-            offset: Offset(0, -widget.controller._nowValue),
-            filterQuality: isAnimating ? FilterQuality.none : null,
-            child: widget.child,
-          ),
-        ),
+        child: buildListener(child: widget.child),
       );
     } else {
       ///filter text field
@@ -425,10 +388,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           if (widget.showListener != null) {
             widget.showListener!(former, newer, time);
           }
-          _changeUserControlHeight(
-            newer,
-            widget.scrollType == KeyboardScrollType.fitAddedText,
-          );
+          _changeUserControlHeight(newer);
         },
         hideListener: (former, newer, time) {
           if (!widget.controller._enabled) {
@@ -437,10 +397,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           if (widget.hideListener != null) {
             widget.hideListener!(former, newer, time);
           }
-          _changeUserControlHeight(
-            newer,
-            widget.scrollType == KeyboardScrollType.fitAddedText,
-          );
+          _changeUserControlHeight(newer);
         },
         showAnimationListener: (value, end) {
           if (!widget.controller._enabled) {
@@ -459,34 +416,43 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           }
         },
         useIOSSystemAnim: widget.useIOSSystemAnim,
-        child: Listener(
-          onPointerMove: (data) {
-            position ??= data.position;
-            if (position?.dy.toInt() != data.position.dy.toInt() ||
-                position?.dx.toInt() != data.position.dx.toInt()) {
-              position = data.position;
-              isMoved = true;
-            }
-            if (widget.closeWhenMove && isMoved) {
-              FocusScope.of(context).requestFocus(FocusNode());
-            }
-          },
-          onPointerDown: (data) {
-            isMoved = false;
-            position = null;
-          },
-          onPointerUp: (data) {
-            if (widget.closeWhenTap && isMoved == false) {
-              FocusScope.of(context).requestFocus(FocusNode());
-            }
-          },
-          child: Transform.translate(
-            offset: Offset(0, -widget.controller._nowValue),
-            filterQuality: isAnimating ? FilterQuality.none : null,
-            child: widget.child,
-          ),
-        ),
+        child: buildListener(child: widget.child),
       );
     }
+  }
+
+  ///通用的Listener构造函数
+  Widget buildListener({
+    required Widget child,
+  }) {
+    bool isAnimating = (inController?.isAnimating ?? false) ||
+        (outController?.isAnimating ?? false);
+    return Listener(
+      onPointerMove: (data) {
+        position ??= data.position;
+        if (position?.dy.toInt() != data.position.dy.toInt() ||
+            position?.dx.toInt() != data.position.dx.toInt()) {
+          position = data.position;
+          isMoved = true;
+        }
+        if (widget.closeWhenMove && isMoved) {
+          FocusScope.of(context).requestFocus(FocusNode());
+        }
+      },
+      onPointerDown: (data) {
+        isMoved = false;
+        position = null;
+      },
+      onPointerUp: (data) {
+        if (widget.closeWhenTap && !isMoved) {
+          FocusScope.of(context).requestFocus(FocusNode());
+        }
+      },
+      child: Transform.translate(
+        offset: Offset(0, -widget.controller._nowValue),
+        filterQuality: isAnimating ? FilterQuality.none : null,
+        child: child,
+      ),
+    );
   }
 }
