@@ -127,7 +127,9 @@ enum KeyboardScrollType {
   //all view
   fitAllView,
   //each text
-  fitAddedText,
+  fitAllTextField,
+  //each text
+  fitAddedTextField,
 }
 
 //KeyBroadScroll widget
@@ -145,7 +147,7 @@ class KeyboardScrollView extends StatefulWidget {
   final KeyboardScrollController controller;
 
   //type
-  final KeyboardScrollType scrollType;
+  final KeyboardScrollType fitType;
 
   //use ios system animation
   final bool useIOSSystemAnim;
@@ -169,7 +171,7 @@ class KeyboardScrollView extends StatefulWidget {
     this.closeWhenTap = false,
     this.closeWhenMove = false,
     this.useIOSSystemAnim = false,
-    this.scrollType = KeyboardScrollType.fitAddedText,
+    this.fitType = KeyboardScrollType.fitAddedTextField,
     this.showListener,
     this.hideListener,
     this.showAnimationListener,
@@ -226,7 +228,7 @@ class _KeyboardScrollViewState extends State<KeyboardScrollView>
 
   ///init controller
   void _initController() {
-    if (widget.scrollType != KeyboardScrollType.fitAllView) {
+    if (widget.fitType != KeyboardScrollType.fitAllView) {
       widget.controller.setFocusListener((focusNode) {
         if (focusNode.hasFocus) {
           _refreshUserControlHeight();
@@ -281,7 +283,7 @@ class _KeyboardScrollViewState extends State<KeyboardScrollView>
       return;
     }
     bool onlyAddedField =
-        (widget.scrollType == KeyboardScrollType.fitAddedText);
+        (widget.fitType == KeyboardScrollType.fitAddedTextField);
     double? bottomNearest = widget.controller.getBottomNeedMargin();
     double bottomMargin = currentKeyboardHeight;
     double bottomNeed = (bottomNearest == null && onlyAddedField) ||
@@ -336,7 +338,7 @@ class _KeyboardScrollViewState extends State<KeyboardScrollView>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.scrollType == KeyboardScrollType.fitAllView) {
+    if (widget.fitType == KeyboardScrollType.fitAllView) {
       ///filter just bottom
       return KeyboardObserver(
         showListener: (former, newer, time) {
