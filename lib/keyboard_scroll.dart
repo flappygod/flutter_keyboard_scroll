@@ -133,7 +133,7 @@ enum KeyboardScrollType {
 }
 
 //KeyBroadScroll widget
-class KeyboardScrollView extends StatefulWidget {
+class KeyboardScroll extends StatefulWidget {
   //close when tap
   final bool closeWhenTap;
 
@@ -164,7 +164,7 @@ class KeyboardScrollView extends StatefulWidget {
   //animation listener
   final KeyboardAnimationListener? hideAnimationListener;
 
-  const KeyboardScrollView({
+  const KeyboardScroll({
     Key? key,
     required this.controller,
     required this.child,
@@ -180,12 +180,12 @@ class KeyboardScrollView extends StatefulWidget {
 
   @override
   State<StatefulWidget> createState() {
-    return _KeyboardScrollViewState();
+    return _KeyboardScrollState();
   }
 }
 
 //state
-class _KeyboardScrollViewState extends State<KeyboardScrollView>
+class _KeyboardScrollState extends State<KeyboardScroll>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   //out animation
   AnimationController? outController;
@@ -238,7 +238,7 @@ class _KeyboardScrollViewState extends State<KeyboardScrollView>
   }
 
   @override
-  void didUpdateWidget(KeyboardScrollView old) {
+  void didUpdateWidget(KeyboardScroll old) {
     super.didUpdateWidget(old);
     WidgetsBinding.instance.addPostFrameCallback((callback) {
       widget.controller.refreshHeights();
