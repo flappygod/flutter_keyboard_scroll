@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'keyboard_observer.dart';
+import 'dart:math';
 
 typedef TextFieldWrapperListener = void Function(FocusNode focusNode);
 
@@ -214,6 +215,12 @@ class _KeyboardScrollState extends State<KeyboardScroll>
   //position
   Offset? position;
 
+  //global key
+  final GlobalKey _globalKey = GlobalKey();
+
+  //bottom margin
+  double _distanceToBottom = 0;
+
   @override
   void initState() {
     super.initState();
@@ -221,9 +228,29 @@ class _KeyboardScrollState extends State<KeyboardScroll>
     initInAnim();
     WidgetsBinding.instance.addPostFrameCallback((callback) {
       widget.controller.refreshHeights();
+      _refreshDistanceToBottom();
       _initController();
     });
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  ///软键盘未弹出情况下
+  void _refreshDistanceToBottom() {
+    //获取控件的 RenderBox
+    final RenderBox renderBox =
+        _globalKey.currentContext!.findRenderObject() as RenderBox;
+
+    //获取控件的位置
+    final Offset position = renderBox.localToGlobal(Offset.zero);
+
+    //获取控件的高度
+    final double widgetHeight = renderBox.size.height;
+
+    //获取屏幕的总高度
+    final double screenHeight = MediaQuery.of(context).size.height;
+
+    //计算距离屏幕底部的距离
+    _distanceToBottom = screenHeight - (position.dy + widgetHeight);
   }
 
   ///init controller
@@ -242,6 +269,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
     super.didUpdateWidget(old);
     WidgetsBinding.instance.addPostFrameCallback((callback) {
       widget.controller.refreshHeights();
+      _refreshDistanceToBottom();
     });
   }
 
@@ -285,7 +313,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
     bool onlyAddedField =
         (widget.fitType == KeyboardScrollType.fitAddedTextField);
     double? bottomNearest = widget.controller.getBottomNeedMargin();
-    double bottomMargin = currentKeyboardHeight;
+    double bottomMargin = max(currentKeyboardHeight - _distanceToBottom, 0);
     double bottomNeed = (bottomNearest == null && onlyAddedField) ||
             (bottomMargin <= (bottomNearest ?? 0))
         ? 0
@@ -338,6 +366,14 @@ class _KeyboardScrollState extends State<KeyboardScroll>
 
   @override
   Widget build(BuildContext context) {
+    return SizedBox(
+      key: _globalKey,
+      child: buildWidget(),
+    );
+  }
+
+  ///key
+  Widget buildWidget() {
     if (widget.fitType == KeyboardScrollType.fitAllView) {
       ///filter just bottom
       return KeyboardObserver(
@@ -364,7 +400,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           if (widget.showAnimationListener != null) {
             widget.showAnimationListener!(value, end);
           }
-          widget.controller._nowValue = value;
+          widget.controller._nowValue = max(value - _distanceToBottom, 0);
           setState(() {});
         },
         hideAnimationListener: (value, end) {
@@ -374,7 +410,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           if (widget.hideAnimationListener != null) {
             widget.hideAnimationListener!(value, end);
           }
-          widget.controller._nowValue = value;
+          widget.controller._nowValue = max(value - _distanceToBottom, 0);
           setState(() {});
         },
         useIOSSystemAnim: widget.useIOSSystemAnim,
