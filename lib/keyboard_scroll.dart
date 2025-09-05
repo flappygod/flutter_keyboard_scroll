@@ -165,6 +165,9 @@ class KeyboardScroll extends StatefulWidget {
   //animation listener
   final KeyboardAnimationListener? hideAnimationListener;
 
+  //clip
+  final Clip clipBehavior;
+
   const KeyboardScroll({
     Key? key,
     required this.controller,
@@ -177,6 +180,7 @@ class KeyboardScroll extends StatefulWidget {
     this.hideListener,
     this.showAnimationListener,
     this.hideAnimationListener,
+    this.clipBehavior = Clip.hardEdge,
   }) : super(key: key);
 
   @override
@@ -366,8 +370,9 @@ class _KeyboardScrollState extends State<KeyboardScroll>
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return ClipRect(
       key: _globalKey,
+      clipBehavior: widget.clipBehavior,
       child: buildWidget(),
     );
   }
