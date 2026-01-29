@@ -3,8 +3,30 @@ import 'package:flutter/material.dart';
 import 'keyboard_observer.dart';
 import 'dart:math';
 
+///动画模式
+enum KeyboardAnimationMode {
+  //模拟动画
+  simulated,
+  //原生动画（仅 iOS）
+  native,
+  //使用 MediaQuery.viewInsetsOf(context).bottom
+  mediaQuery
+}
+
+//type
+enum KeyboardScrollType {
+  //all view
+  fitAllView,
+  //each text
+  fitAllTextField,
+  //each text
+  fitAddedTextField,
+}
+
+///text field wrapper listener
 typedef TextFieldWrapperListener = void Function(FocusNode focusNode);
 
+///text field wrapper
 class TextFieldWrapper {
   TextFieldWrapper.fromKey({
     required this.focusNode,
@@ -123,16 +145,6 @@ class KeyboardScrollController {
   }
 }
 
-//type
-enum KeyboardScrollType {
-  //all view
-  fitAllView,
-  //each text
-  fitAllTextField,
-  //each text
-  fitAddedTextField,
-}
-
 //KeyBroadScroll widget
 class KeyboardScroll extends StatefulWidget {
   //close when tap
@@ -151,7 +163,7 @@ class KeyboardScroll extends StatefulWidget {
   final KeyboardScrollType fitType;
 
   //use ios system animation
-  final bool useIOSSystemAnim;
+  final KeyboardAnimationMode animationMode;
 
   //listener
   final KeyboardObserverListener? showListener;
@@ -174,7 +186,7 @@ class KeyboardScroll extends StatefulWidget {
     required this.child,
     this.closeWhenTap = false,
     this.closeWhenMove = false,
-    this.useIOSSystemAnim = false,
+    this.animationMode = KeyboardAnimationMode.simulated,
     this.fitType = KeyboardScrollType.fitAddedTextField,
     this.showListener,
     this.hideListener,
@@ -418,7 +430,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           widget.controller._nowValue = max(value - _distanceToBottom, 0);
           setState(() {});
         },
-        useIOSSystemAnim: widget.useIOSSystemAnim,
+        animationMode: widget.animationMode,
         child: buildListener(child: widget.child),
       );
     } else {
@@ -458,7 +470,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
             widget.hideAnimationListener!(value, end);
           }
         },
-        useIOSSystemAnim: widget.useIOSSystemAnim,
+        animationMode: widget.animationMode,
         child: buildListener(child: widget.child),
       );
     }

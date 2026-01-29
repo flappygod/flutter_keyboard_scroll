@@ -1,3 +1,3 @@
-## 1.0.21
+## 1.0.22
 
-* Consider child widget not align bottom.
+* Use animationMode to replace former animation.
