@@ -9,16 +9,7 @@
 //eventSink
 @property(nonatomic,strong) FlutterEventSink eventSink;
 
-//frameView
-@property(nonatomic,strong) UIView* frameView;
-
-//show link
-@property(nonatomic,strong) CADisplayLink* showLink;
-
-//hide link
-@property(nonatomic,strong) CADisplayLink* hideLink;
-
-// 标志变量：标记应用是否在前台
+//标志变量：标记应用是否在前台
 @property(nonatomic, assign) BOOL isAppInForeground;
 
 //缓存的软键盘高度
@@ -33,9 +24,6 @@
 }
 
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
-    FlutterMethodChannel* channel = [FlutterMethodChannel
-                                     methodChannelWithName:@"keyboard_observer"
-                                     binaryMessenger:[registrar messenger]];
     
     //create eventChannel
     FlutterEventChannel* eventChannel=[FlutterEventChannel eventChannelWithName:@"keyboard_observer_event"
@@ -48,26 +36,8 @@
     
     //set Handler
     [instance.eventChannel setStreamHandler:instance];
-    
-    //set delegate
-    [registrar addMethodCallDelegate:instance channel:channel];
 }
 
-
-- (void)handleMethodCall:(FlutterMethodCall*)call result:(FlutterResult)result {
-    if([@"openAnimListener" isEqualToString:call.method]){
-        [self initFrameView];
-        [self createDisplayLink];
-        result(@"1");
-    }
-    else if([@"closeAnimListener" isEqualToString:call.method]){
-        [self disposeDisplayLink];
-        [self disposeFrameView];
-        result(@"1");
-    }else{
-        result(FlutterMethodNotImplemented);
-    }
-}
 
 #pragma mark - Application Lifecycle
 - (void)applicationDidEnterBackground {
@@ -104,10 +74,6 @@
         eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
         eventSink(eventDic);
         
-        //执行
-        [weakSelf keyboardWillShowAnimation:keyboardHeight
-                                andDuration:420
-                                   andCurve:UIViewAnimationOptionCurveLinear];
     });
 }
 
@@ -151,20 +117,6 @@
 }
 
 
-// 创建一个frameView用于软键盘弹出的动画
-- (void)initFrameView {
-    UIWindow *keyWindow = [self activeWindow];
-    if (!keyWindow) {
-        return;
-    }
-    //获取顶层控制器
-    UIViewController *topController = [self _topViewController:keyWindow.rootViewController];
-    // 创建并配置 frameView
-    _frameView = [[UIView alloc] initWithFrame:CGRectZero];
-    
-    //将frameView 添加到顶层控制器的视图中
-    [topController.view addSubview:_frameView];
-}
 
 
 // 获取当前的 activeWindow
@@ -210,66 +162,6 @@
     return [self _topViewController:presentedViewController];
 }
 
-//disposeFrameView
--(void)disposeFrameView{
-    [_frameView removeFromSuperview];
-    _frameView=nil;
-}
-
-//create display link
-- (void)createDisplayLink
-{
-    //create show
-    _showLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(showDisplayLink:)];
-    [_showLink setPaused:true];
-    [_showLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-    //create hied
-    _hideLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(hideDisplayLink:)];
-    [_hideLink setPaused:true];
-    [_hideLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-}
-
-//dispose display link
-- (void)disposeDisplayLink
-{
-    //dispose show
-    [_showLink invalidate];
-    _showLink = nil;
-    //dispose hide
-    [_hideLink invalidate];
-    _hideLink = nil;
-}
-
-
-
-//handle event for view
-- (void)showDisplayLink:(CADisplayLink *)displayLink
-{
-    if(_frameView==nil||_eventSink==nil||!_frameView.layer.presentationLayer){
-        return;
-    }
-    if(_animationEventDic==nil){
-        _animationEventDic=[[NSMutableDictionary alloc] init];
-    }
-    _animationEventDic[@"type"]=[NSNumber numberWithInt:1];
-    _animationEventDic[@"data"]=[NSString stringWithFormat:@"%.2f",_frameView.layer.presentationLayer.frame.size.height];
-    _animationEventDic[@"end"]=[NSNumber numberWithBool:(displayLink==nil)];
-    _eventSink(_animationEventDic);
-}
-
--(void)hideDisplayLink:(CADisplayLink *)displayLink
-{
-    if(_frameView==nil||_eventSink==nil||!_frameView.layer.presentationLayer){
-        return;
-    }
-    if(_animationEventDic==nil){
-        _animationEventDic=[[NSMutableDictionary alloc] init];
-    }
-    _animationEventDic[@"type"]=[NSNumber numberWithInt:0];
-    _animationEventDic[@"data"]=[NSString stringWithFormat:@"%.2f",_frameView.layer.presentationLayer.frame.size.height];
-    _animationEventDic[@"end"]=[NSNumber numberWithBool:(displayLink==nil)];
-    _eventSink(_animationEventDic);
-}
 
 -(void)keyboardFrameChangeNotification:(NSNotification *)notification{
     
@@ -320,35 +212,9 @@
     eventDic[@"newer"]=[NSString stringWithFormat:@"%.2f",height];
     eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
     _eventSink(eventDic);
-    
-    UIViewAnimationOptions options = keyboardTransitionAnimationCurve << 16;
-    [self keyboardWillShowAnimation:height
-                        andDuration:duration
-                           andCurve:options];
 }
 
 
-// 软键盘弹出动画模拟回调
--(void)keyboardWillShowAnimation:(CGFloat)height
-                     andDuration:(NSTimeInterval)duration
-                        andCurve:(UIViewAnimationOptions)options{
-    if(self.frameView==nil){
-        return;
-    }
-    [self.frameView.layer removeAllAnimations];
-    [self.showLink setPaused:false];
-    [self.hideLink setPaused:true];
-    __weak typeof(self) safeSelf=self;
-    [UIView animateWithDuration:duration
-                          delay:0
-                        options:options
-                     animations:^{
-        safeSelf.frameView.frame = CGRectMake(-1, 0 ,1,height);
-    } completion:^(BOOL finished) {
-        [safeSelf showDisplayLink:nil];
-        [safeSelf.showLink setPaused:true];
-    }];
-}
 
 
 //软键盘隐藏
@@ -365,35 +231,8 @@
     eventDic[@"newer"]=@"0.00";
     eventDic[@"time"]= [NSString stringWithFormat:@"%ld",(long)([[NSDate date] timeIntervalSince1970] * 1000)];
     _eventSink(eventDic);
-    
-    UIViewAnimationOptions options = keyboardTransitionAnimationCurve << 16;
-    [self keyboardWillHideAnimation:0
-                        andDuration:duration
-                           andCurve:options];
 }
 
-
-// 软键盘弹出动画模拟回调
--(void)keyboardWillHideAnimation:(CGFloat)height
-                     andDuration:(NSTimeInterval)duration
-                        andCurve:(UIViewAnimationOptions)options{
-    if(self.frameView==nil){
-        return;
-    }
-    [self.frameView.layer removeAllAnimations];
-    [self.hideLink setPaused:false];
-    [self.showLink setPaused:true];
-    __weak typeof(self) safeSelf=self;
-    [UIView animateWithDuration:duration
-                          delay:0
-                        options:options
-                     animations:^{
-        safeSelf.frameView.frame = CGRectMake(-1, 0 , 1, height);
-    } completion:^(BOOL finished) {
-        [safeSelf hideDisplayLink:nil];
-        [safeSelf.hideLink setPaused:true];
-    }];
-}
 
 
 #pragma mark - <FlutterStreamHandler>

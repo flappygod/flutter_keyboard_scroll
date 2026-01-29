@@ -7,8 +7,6 @@ import 'dart:math';
 enum KeyboardAnimationMode {
   //模拟动画
   simulated,
-  //原生动画（仅 iOS）
-  native,
   //使用 MediaQuery.viewInsetsOf(context).bottom
   mediaQuery
 }
