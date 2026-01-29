@@ -13,10 +13,10 @@ class KeyboardObserveListenManager {
   static bool _listenState = false;
 
   //show start listener
-  static final List<KeyboardObserverListener> _showListeners = [];
+  static final Set<KeyboardObserverListener> _showListeners = {};
 
   //hide start listener
-  static final List<KeyboardObserverListener> _hideListeners = [];
+  static final Set<KeyboardObserverListener> _hideListeners = {};
 
   //add show listener
   static void addKeyboardShowListener(KeyboardObserverListener listener) {
@@ -52,8 +52,8 @@ class KeyboardObserveListenManager {
         .listen((data) {
       //软键盘弹出
       if (data["type"] == 2) {
-        for (int s = 0; s < _showListeners.length; s++) {
-          _showListeners[s](
+        for (KeyboardObserverListener listener in _showListeners) {
+          listener(
             double.parse(data["former"].toString()),
             double.parse(data["newer"].toString()),
             int.parse(data["time"].toString()),
@@ -62,8 +62,8 @@ class KeyboardObserveListenManager {
       }
       //软键盘收起
       if (data["type"] == 3) {
-        for (int s = 0; s < _hideListeners.length; s++) {
-          _hideListeners[s](
+        for (KeyboardObserverListener listener in _showListeners) {
+          listener(
             double.parse(data["former"].toString()),
             double.parse(data["newer"].toString()),
             int.parse(data["time"].toString()),
@@ -208,6 +208,8 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         _hideAnimation(f, n);
       }
     };
+    KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
+    KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
 
     ///if showAnimationListener !=null or hideAnimationListener!=null ,open animation
     if (widget.showAnimationListener != null ||
@@ -229,8 +231,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         duration: widget.durationHide ?? const Duration(milliseconds: 380),
         vsync: this,
       );
-      KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
-      KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
     }
   }
 
