@@ -50,13 +50,13 @@ class _MyAppState extends State<MyApp> {
             print("BBB:::$newer");
           },
           showAnimationListener: (value, flag) {
-            print("AAAA:::$value");
+            print("AAAA:::$value Flag:$flag");
             setState(() {
               _marginBottom = value;
             });
           },
           hideAnimationListener: (value, flag) {
-            print("BBBB:::$value");
+            print("BBBB:::$value Flag:$flag");
             setState(() {
               _marginBottom = value;
             });

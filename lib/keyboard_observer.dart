@@ -219,12 +219,16 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         widget.hideAnimationListener != null) {
       ///hide or show animation listener
       _showAnimListener ??= () {
-        _formerHeight = _showAnim!.value;
-        widget.showAnimationListener?.call(_formerHeight, false);
+        if(_formerHeight!=_showAnim!.value){
+          _formerHeight = _showAnim!.value;
+          widget.showAnimationListener?.call(_formerHeight, false);
+        }
       };
       _hideAnimListener ??= () {
-        _formerHeight = _hideAnim!.value;
-        widget.hideAnimationListener?.call(_formerHeight, false);
+        if(_formerHeight!=_hideAnim!.value){
+          _formerHeight = _hideAnim!.value;
+          widget.hideAnimationListener?.call(_formerHeight, false);
+        }
       };
       _showAnimationController = AnimationController(
         duration: widget.durationShow ?? const Duration(milliseconds: 380),
@@ -263,10 +267,18 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
     ///if showAnimationListener !=null or hideAnimationListener!=null ,open animation
     _showAnimListener ??= () {
-      widget.showAnimationListener?.call(_bottomPadding, false);
+      double bottomPadding = _getBottomPadding(context);
+      if(_bottomPadding!=bottomPadding){
+        _bottomPadding=bottomPadding;
+        widget.showAnimationListener?.call(_bottomPadding, false);
+      }
     };
     _hideAnimListener ??= () {
-      widget.hideAnimationListener?.call(_bottomPadding, false);
+      double bottomPadding = _getBottomPadding(context);
+      if(_bottomPadding!=bottomPadding){
+        _bottomPadding=bottomPadding;
+        widget.hideAnimationListener?.call(_bottomPadding, false);
+      }
     };
     _showAnimationController = AnimationController(
       duration: const Duration(milliseconds: 600),
@@ -383,9 +395,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       _ratio ??= 1;
     } else {
       _ratio ??= 1;
-    }
-    if (widget.animationMode == KeyboardAnimationMode.mediaQuery) {
-      _bottomPadding = _getBottomPadding(context);
     }
     return widget.child ?? const SizedBox();
   }
