@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'keyboard_scroll.dart';
 import 'dart:io';
@@ -369,7 +369,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   //get bottom padding
   double _getBottomPadding(BuildContext context) {
     try {
-      return MediaQuery.of(context).padding.bottom;
+      return MediaQuery.viewInsetsOf(context).bottom;
     } catch (e) {
       return 0.0;
     }
