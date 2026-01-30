@@ -4,6 +4,8 @@ import android.app.Activity;
 
 import androidx.annotation.NonNull;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
@@ -84,37 +86,52 @@ public class FlutterKeyboardScrollPlugin implements FlutterPlugin, MethodCallHan
     setActivity(null);
   }
 
-  void setActivity(ActivityPluginBinding binding) {
-    if (binding != null) {
-      activity = binding.getActivity();
-      keyboardChangeListener = new KeyboardChangeObserver(activity);
-      keyboardChangeListener.setKeyboardListener(new KeyboardListener() {
-        private int keyboardHeight;
+  float density = 0;
 
-        @Override
-        public void onKeyboardChange(boolean isShow, int keyboardHeight) {
-          if (eventSink != null) {
-            HashMap<String, Object> map = new HashMap<>();
-            if (isShow) {
-              this.keyboardHeight = keyboardHeight;
-              map.put("type", 2);
-              map.put("former", "0.00");
-              map.put("newer", String.valueOf(keyboardHeight));
-              map.put("time", System.currentTimeMillis());
-            } else {
-              map.put("type", 3);
-              map.put("former", String.valueOf(this.keyboardHeight));
-              map.put("newer", "0.00");
-              map.put("time", System.currentTimeMillis());
-            }
-            eventSink.success(map);
-            System.out.print(map);
+  void setActivity(ActivityPluginBinding binding) {
+    if (binding == null) {
+      activity = null;
+      return;
+    }
+    activity = binding.getActivity();
+    keyboardChangeListener = new KeyboardChangeObserver(activity);
+    keyboardChangeListener.setKeyboardListener(new KeyboardListener() {
+
+      private String lastKeyboardDpStr = "0.00";
+
+      @Override
+      public void onKeyboardChange(boolean isShow, int keyboardHeightPx) {
+        //不为空
+        if (eventSink == null) {
+          return;
+        }
+        //Density
+        if (density == 0.0) {
+          density = activity.getResources().getDisplayMetrics().density;
+          if (density == 0.0) {
+            return;
           }
         }
-      });
-    } else {
-      activity = null;
-    }
+        BigDecimal px = BigDecimal.valueOf(keyboardHeightPx);
+        BigDecimal den = new BigDecimal(String.valueOf(density));
+        BigDecimal dp = px.divide(den, 2, RoundingMode.HALF_UP);
+        String dpStr = dp.toPlainString();
+        HashMap<String, Object> map = new HashMap<>();
+        if (isShow) {
+          lastKeyboardDpStr = dpStr;
+          map.put("type", 2);
+          map.put("former", "0.00");
+          map.put("newer", dpStr);
+          map.put("time", System.currentTimeMillis());
+        } else {
+          map.put("type", 3);
+          map.put("former", lastKeyboardDpStr);
+          map.put("newer", "0.00");
+          map.put("time", System.currentTimeMillis());
+        }
+        eventSink.success(map);
+      }
+    });
   }
 
 }

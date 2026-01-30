@@ -164,9 +164,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   //hide anim
   Animation<double>? _hideAnim;
 
-  //ratio
-  double? _ratio;
-
   //bottom padding
   double _bottomPadding = 0;
 
@@ -190,25 +187,15 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   void _useSimulated() {
     ///hide or show listener
     _showListener ??= (double former, double newer, int time) {
-      if (_ratio == null) {
-        return;
-      }
-      double f = former / _ratio!;
-      double n = newer / _ratio!;
-      widget.showListener?.call(f, n, time);
+      widget.showListener?.call(former, newer, time);
       if (widget.showAnimationListener != null) {
-        _showAnimation(f, n);
+        _showAnimation(former, newer);
       }
     };
     _hideListener ??= (double former, double newer, int time) {
-      if (_ratio == null) {
-        return;
-      }
-      double f = former / _ratio!;
-      double n = newer / _ratio!;
-      widget.hideListener?.call(f, n, time);
+      widget.hideListener?.call(former, newer, time);
       if (widget.hideAnimationListener != null) {
-        _hideAnimation(f, n);
+        _hideAnimation(former, newer);
       }
     };
     KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
@@ -245,37 +232,29 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   void _useMediaQuery() {
     ///hide or show listener
     _showListener ??= (double former, double newer, int time) {
-      if (_ratio != null) {
-        double f = former / _ratio!;
-        double n = newer / _ratio!;
-        widget.showListener?.call(f, n, time);
-        if (widget.showAnimationListener != null) {
-          _showAnimation(f, n);
-        }
+      widget.showListener?.call(former, newer, time);
+      if (widget.showAnimationListener != null) {
+        _showAnimation(former, former);
       }
     };
     _hideListener ??= (double former, double newer, int time) {
-      if (_ratio != null) {
-        double f = former / _ratio!;
-        double n = newer / _ratio!;
-        widget.hideListener?.call(f, n, time);
-        if (widget.hideAnimationListener != null) {
-          _hideAnimation(f, n);
-        }
+      widget.hideListener?.call(former, newer, time);
+      if (widget.hideAnimationListener != null) {
+        _hideAnimation(former, newer);
       }
     };
 
     ///if showAnimationListener !=null or hideAnimationListener!=null ,open animation
     _showAnimListener ??= () {
       double bottomPadding = _getBottomPadding(context);
-      if(_bottomPadding!=bottomPadding){
+      if(_bottomPadding!=bottomPadding && bottomPadding < MediaQuery.of(context).size.height){
         _bottomPadding=bottomPadding;
         widget.showAnimationListener?.call(_bottomPadding, false);
       }
     };
     _hideAnimListener ??= () {
       double bottomPadding = _getBottomPadding(context);
-      if(_bottomPadding!=bottomPadding){
+      if(_bottomPadding!=bottomPadding && bottomPadding < MediaQuery.of(context).size.height){
         _bottomPadding=bottomPadding;
         widget.hideAnimationListener?.call(_bottomPadding, false);
       }
@@ -323,6 +302,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _disposeListeners();
     super.dispose();
   }
+
 
   ///show animation
   void _showAnimation(double former, double newer) {
@@ -389,13 +369,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
   @override
   Widget build(BuildContext context) {
-    if (Platform.isAndroid) {
-      _ratio ??= MediaQuery.of(context).devicePixelRatio;
-    } else if (Platform.isIOS) {
-      _ratio ??= 1;
-    } else {
-      _ratio ??= 1;
-    }
     return widget.child ?? const SizedBox();
   }
 }
