@@ -205,13 +205,13 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         widget.hideAnimationListener != null) {
       ///hide or show animation listener
       _showAnimListener ??= () {
-        if(_formerHeight!=_showAnim!.value){
+        if (_formerHeight != _showAnim!.value) {
           _formerHeight = _showAnim!.value;
           widget.showAnimationListener?.call(_formerHeight, false);
         }
       };
       _hideAnimListener ??= () {
-        if(_formerHeight!=_hideAnim!.value){
+        if (_formerHeight != _hideAnim!.value) {
           _formerHeight = _hideAnim!.value;
           widget.hideAnimationListener?.call(_formerHeight, false);
         }
@@ -246,15 +246,15 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     ///if showAnimationListener !=null or hideAnimationListener!=null ,open animation
     _showAnimListener ??= () {
       double bottomPadding = _getBottomPadding(context);
-      if(_bottomPadding!=bottomPadding){
-        _bottomPadding=bottomPadding;
+      if (_bottomPadding != bottomPadding) {
+        _bottomPadding = bottomPadding;
         widget.showAnimationListener?.call(_bottomPadding, false);
       }
     };
     _hideAnimListener ??= () {
       double bottomPadding = _getBottomPadding(context);
-      if(_bottomPadding!=bottomPadding){
-        _bottomPadding=bottomPadding;
+      if (_bottomPadding != bottomPadding) {
+        _bottomPadding = bottomPadding;
         widget.hideAnimationListener?.call(_bottomPadding, false);
       }
     };
@@ -302,7 +302,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     super.dispose();
   }
 
-
   ///show animation
   void _showAnimation(double former, double newer) {
     if (_hideAnimListener != null) {
@@ -318,18 +317,16 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _showAnimationController?.reset();
     //start animation
     if (_showAnimationController != null) {
-      _showAnim = Tween<double>(begin: _formerHeight, end: newer)
-          .animate(CurvedAnimation(
-        parent: _showAnimationController!,
-        curve: widget.curveShow ?? const Cubic(0.34, 0.84, 0.12, 1.00),
-      ));
+      _showAnim = Tween<double>(begin: _formerHeight, end: newer).animate(
+        CurvedAnimation(
+          parent: _showAnimationController!,
+          curve: widget.curveShow ?? const Cubic(0.34, 0.84, 0.12, 1.00),
+        ),
+      );
       _showAnim?.addListener(_showAnimListener!);
-      _showAnimationController?.addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          widget.showAnimationListener?.call(_showAnim?.value ?? 0, true);
-        }
+      _showAnimationController?.forward().then((_) {
+        widget.showAnimationListener?.call(_showAnim?.value ?? 0, true);
       });
-      _showAnimationController?.forward();
     }
   }
 
@@ -348,18 +345,16 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _hideAnimationController?.reset();
     //start animation
     if (_hideAnimationController != null) {
-      _hideAnim = Tween<double>(begin: _formerHeight, end: newer)
-          .animate(CurvedAnimation(
-        parent: _hideAnimationController!,
-        curve: widget.curveShow ?? const Cubic(0.34, 0.84, 0.12, 1.00),
-      ));
+      _hideAnim = Tween<double>(begin: _formerHeight, end: newer).animate(
+        CurvedAnimation(
+          parent: _hideAnimationController!,
+          curve: widget.curveShow ?? const Cubic(0.34, 0.84, 0.12, 1.00),
+        ),
+      );
       _hideAnim?.addListener(_hideAnimListener!);
-      _hideAnimationController?.addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          widget.hideAnimationListener?.call(_hideAnim?.value ?? 0, true);
-        }
+      _hideAnimationController?.forward().then((_) {
+        widget.hideAnimationListener?.call(_hideAnim?.value ?? 0, true);
       });
-      _hideAnimationController?.forward();
     }
   }
 
