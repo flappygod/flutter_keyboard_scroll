@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'keyboard_scroll.dart';
-import 'dart:io';
 
 class KeyboardObserveListenManager {
   //eventChannel
@@ -62,7 +61,7 @@ class KeyboardObserveListenManager {
       }
       //软键盘收起
       if (data["type"] == 3) {
-        for (KeyboardObserverListener listener in _showListeners) {
+        for (KeyboardObserverListener listener in _hideListeners) {
           listener(
             double.parse(data["former"].toString()),
             double.parse(data["newer"].toString()),
@@ -218,11 +217,11 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         }
       };
       _showAnimationController = AnimationController(
-        duration: widget.durationShow ?? const Duration(milliseconds: 380),
+        duration: widget.durationShow ?? const Duration(milliseconds: 500),
         vsync: this,
       );
       _hideAnimationController = AnimationController(
-        duration: widget.durationHide ?? const Duration(milliseconds: 380),
+        duration: widget.durationHide ?? const Duration(milliseconds: 500),
         vsync: this,
       );
     }
@@ -234,7 +233,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _showListener ??= (double former, double newer, int time) {
       widget.showListener?.call(former, newer, time);
       if (widget.showAnimationListener != null) {
-        _showAnimation(former, former);
+        _showAnimation(former, newer);
       }
     };
     _hideListener ??= (double former, double newer, int time) {
@@ -247,14 +246,14 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     ///if showAnimationListener !=null or hideAnimationListener!=null ,open animation
     _showAnimListener ??= () {
       double bottomPadding = _getBottomPadding(context);
-      if(_bottomPadding!=bottomPadding && bottomPadding < MediaQuery.of(context).size.height){
+      if(_bottomPadding!=bottomPadding){
         _bottomPadding=bottomPadding;
         widget.showAnimationListener?.call(_bottomPadding, false);
       }
     };
     _hideAnimListener ??= () {
       double bottomPadding = _getBottomPadding(context);
-      if(_bottomPadding!=bottomPadding && bottomPadding < MediaQuery.of(context).size.height){
+      if(_bottomPadding!=bottomPadding){
         _bottomPadding=bottomPadding;
         widget.hideAnimationListener?.call(_bottomPadding, false);
       }
@@ -325,9 +324,12 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         curve: widget.curveShow ?? const Cubic(0.34, 0.84, 0.12, 1.00),
       ));
       _showAnim?.addListener(_showAnimListener!);
-      _showAnimationController?.forward().then((value) {
-        widget.showAnimationListener?.call(_showAnim?.value ?? 0, true);
+      _showAnimationController?.addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          widget.showAnimationListener?.call(_showAnim?.value ?? 0, true);
+        }
       });
+      _showAnimationController?.forward();
     }
   }
 
@@ -352,9 +354,12 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         curve: widget.curveShow ?? const Cubic(0.34, 0.84, 0.12, 1.00),
       ));
       _hideAnim?.addListener(_hideAnimListener!);
-      _hideAnimationController?.forward().then((value) {
-        widget.hideAnimationListener?.call(_hideAnim?.value ?? 0, true);
+      _hideAnimationController?.addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          widget.hideAnimationListener?.call(_hideAnim?.value ?? 0, true);
+        }
       });
+      _hideAnimationController?.forward();
     }
   }
 
