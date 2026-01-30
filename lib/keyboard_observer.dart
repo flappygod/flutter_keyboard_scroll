@@ -167,6 +167,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   //ratio
   double? _ratio;
 
+  //bottom padding
+  double _bottomPadding = 0;
+
   //init state
   @override
   void initState() {
@@ -260,19 +263,17 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
     ///if showAnimationListener !=null or hideAnimationListener!=null ,open animation
     _showAnimListener ??= () {
-      widget.showAnimationListener
-          ?.call(MediaQuery.of(context).padding.bottom, false);
+      widget.showAnimationListener?.call(_bottomPadding, false);
     };
     _hideAnimListener ??= () {
-      widget.hideAnimationListener
-          ?.call(MediaQuery.of(context).padding.bottom, false);
+      widget.hideAnimationListener?.call(_bottomPadding, false);
     };
     _showAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 600),
       vsync: this,
     );
     _hideAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 600),
       vsync: this,
     );
     KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
@@ -365,6 +366,15 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     }
   }
 
+  //get bottom padding
+  double _getBottomPadding(BuildContext context) {
+    try {
+      return MediaQuery.of(context).padding.bottom;
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (Platform.isAndroid) {
@@ -373,6 +383,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       _ratio ??= 1;
     } else {
       _ratio ??= 1;
+    }
+    if (widget.animationMode == KeyboardAnimationMode.mediaQuery) {
+      _bottomPadding = _getBottomPadding(context);
     }
     return widget.child ?? const SizedBox();
   }
