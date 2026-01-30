@@ -16,6 +16,9 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  ///底部
+  double _marginBottom = 0;
+
   @override
   void initState() {
     super.initState();
@@ -48,15 +51,27 @@ class _MyAppState extends State<MyApp> {
           },
           showAnimationListener: (value, flag) {
             print("AAAA:::$value");
+            setState(() {
+              _marginBottom = value;
+            });
           },
           hideAnimationListener: (value, flag) {
             print("BBBB:::$value");
+            setState(() {
+              _marginBottom = value;
+            });
           },
           animationMode: KeyboardAnimationMode.mediaQuery,
           child: Container(
+            width: double.infinity,
+            height: double.infinity,
             alignment: Alignment.bottomCenter,
-            child: SizedBox(
+            child: Container(
               width: MediaQuery.of(context).size.width,
+              decoration: const BoxDecoration(
+                color: Colors.red,
+              ),
+              margin: EdgeInsets.fromLTRB(0, 0, 0, _marginBottom),
               height: 45,
               child: const TextField(
                 textAlign: TextAlign.center,
