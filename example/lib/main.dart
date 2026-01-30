@@ -61,7 +61,7 @@ class _MyAppState extends State<MyApp> {
               _marginBottom = value;
             });
           },
-          animationMode: KeyboardAnimationMode.mediaQuery,
+          animationMode: KeyboardAnimationMode.simulated,
           child: Container(
             width: double.infinity,
             height: double.infinity,
