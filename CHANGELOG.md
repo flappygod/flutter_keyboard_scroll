@@ -1,3 +1,4 @@
 ## 1.0.22
 
-* Use animationMode to replace former animation.
+* Use KeyboardAnimationMode.simulated to simulated keyboard animation.
+* Use KeyboardAnimationMode.mediaQuery to observe bottom insets.
