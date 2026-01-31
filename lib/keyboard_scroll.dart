@@ -1,3 +1,5 @@
+import 'dart:nativewrappers/_internal/vm/lib/ffi_allocation_patch.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'keyboard_observer.dart';
@@ -32,9 +34,7 @@ class TextFieldWrapper {
     this.more = 0,
   }) {
     _focusDelegateListener = () {
-      if (_focusChangedListener != null) {
-        _focusChangedListener!(focusNode);
-      }
+      _focusChangedListener?.call(focusNode);
     };
     focusNode.addListener(_focusDelegateListener!);
   }
@@ -396,25 +396,19 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           if (!widget.controller._enabled) {
             return;
           }
-          if (widget.showListener != null) {
-            widget.showListener!(former, newer, time);
-          }
+          widget.showListener?.call(former, newer, time);
         },
         hideListener: (former, newer, time) {
           if (!widget.controller._enabled) {
             return;
           }
-          if (widget.hideListener != null) {
-            widget.hideListener!(former, newer, time);
-          }
+          widget.hideListener?.call(former, newer, time);
         },
         showAnimationListener: (value, end) {
           if (!widget.controller._enabled) {
             return;
           }
-          if (widget.showAnimationListener != null) {
-            widget.showAnimationListener!(value, end);
-          }
+          widget.showAnimationListener?.call(value, end);
           widget.controller._nowValue = max(value - _distanceToBottom, 0);
           setState(() {});
         },
@@ -422,9 +416,7 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           if (!widget.controller._enabled) {
             return;
           }
-          if (widget.hideAnimationListener != null) {
-            widget.hideAnimationListener!(value, end);
-          }
+          widget.hideAnimationListener?.call(value, end);
           widget.controller._nowValue = max(value - _distanceToBottom, 0);
           setState(() {});
         },
@@ -438,35 +430,27 @@ class _KeyboardScrollState extends State<KeyboardScroll>
           if (!widget.controller._enabled) {
             return;
           }
-          if (widget.showListener != null) {
-            widget.showListener!(former, newer, time);
-          }
+          widget.showListener?.call(former, newer, time);
           _changeUserControlHeight(newer);
         },
         hideListener: (former, newer, time) {
           if (!widget.controller._enabled) {
             return;
           }
-          if (widget.hideListener != null) {
-            widget.hideListener!(former, newer, time);
-          }
+          widget.hideListener?.call(former, newer, time);
           _changeUserControlHeight(newer);
         },
         showAnimationListener: (value, end) {
           if (!widget.controller._enabled) {
             return;
           }
-          if (widget.showAnimationListener != null) {
-            widget.showAnimationListener!(value, end);
-          }
+          widget.showAnimationListener?.call(value, end);
         },
         hideAnimationListener: (value, end) {
           if (!widget.controller._enabled) {
             return;
           }
-          if (widget.hideAnimationListener != null) {
-            widget.hideAnimationListener!(value, end);
-          }
+          widget.hideAnimationListener?.call(value, end);
         },
         animationMode: widget.animationMode,
         child: buildListener(child: widget.child),

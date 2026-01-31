@@ -11,7 +11,8 @@ enum KeyboardAnimationType {
 
 class KeyboardObserveListenManager {
   //eventChannel
-  static const EventChannel _eventChannel = EventChannel('keyboard_observer_event');
+  static const EventChannel _eventChannel =
+      EventChannel('keyboard_observer_event');
 
   //listen state
   static bool _listenState = false;
@@ -50,7 +51,10 @@ class KeyboardObserveListenManager {
       return;
     }
     _listenState = true;
-    _eventChannel.receiveBroadcastStream().map((result) => result as Map).listen((data) {
+    _eventChannel
+        .receiveBroadcastStream()
+        .map((result) => result as Map)
+        .listen((data) {
       //软键盘弹出
       if (data["type"] == 2) {
         for (KeyboardObserverListener listener in _showListeners) {
@@ -76,7 +80,8 @@ class KeyboardObserveListenManager {
 }
 
 //start listener
-typedef KeyboardObserverListener = Function(double former, double newer, int time);
+typedef KeyboardObserverListener = Function(
+    double former, double newer, int time);
 
 //animation value listener
 typedef KeyboardAnimationListener = Function(double bottomInsets, bool end);
@@ -90,13 +95,13 @@ class KeyboardObserver extends StatefulWidget {
   final Curve? curveShow;
 
   //animation duration show
-  final Duration? durationShow;
+  final Duration durationShow;
 
   //curve
   final Curve? curveHide;
 
   //animation duration hide
-  final Duration? durationHide;
+  final Duration durationHide;
 
   //if true , we will use ios system animation
   final KeyboardAnimationMode animationMode;
@@ -120,9 +125,9 @@ class KeyboardObserver extends StatefulWidget {
     this.showListener,
     this.hideListener,
     this.curveShow,
-    this.durationShow,
+    this.durationShow = const Duration(milliseconds: 500),
     this.curveHide,
-    this.durationHide,
+    this.durationHide = const Duration(milliseconds: 500),
     this.showAnimationListener,
     this.hideAnimationListener,
     this.animationMode = KeyboardAnimationMode.simulated,
@@ -135,7 +140,8 @@ class KeyboardObserver extends StatefulWidget {
 }
 
 //state
-class _KeyboardObserverState extends State<KeyboardObserver> with TickerProviderStateMixin, WidgetsBindingObserver {
+class _KeyboardObserverState extends State<KeyboardObserver>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   //show animation controller
   AnimationController? _showAnimationController;
 
@@ -168,43 +174,59 @@ class _KeyboardObserverState extends State<KeyboardObserver> with TickerProvider
 
   //type
   KeyboardAnimationType? _mediaAnimType;
-  double? _mediaEndValue;
+  double? _mediaAnimEndValue;
 
   //init state
   @override
   void initState() {
-    _initListeners();
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initListeners();
   }
 
   @override
   void didUpdateWidget(KeyboardObserver oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.hideAnimationListener != null || widget.showAnimationListener != null) {
+    if (widget.durationShow != oldWidget.durationShow ||
+        widget.durationHide != oldWidget.durationHide ||
+        widget.animationMode != oldWidget.animationMode) {
       _initListeners();
     }
   }
 
   ///使用模拟的方式
   void _useSimulated() {
+    _mediaAnimType = null;
+    _mediaAnimEndValue = null;
+
+    if (_showListener != null) {
+      KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
+    }
+    if (_hideListener != null) {
+      KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
+    }
+
     ///hide or show listener
-    _showListener ??= (double former, double newer, int time) {
+    _showListener = (double former, double newer, int time) {
       widget.showListener?.call(former, newer, time);
-      if (widget.showAnimationListener != null) {
-        _showAnimation(former, newer);
+      if (widget.showAnimationListener == null) {
+        return;
       }
+      _showAnimation(former, newer);
     };
-    _hideListener ??= (double former, double newer, int time) {
+    _hideListener = (double former, double newer, int time) {
       widget.hideListener?.call(former, newer, time);
-      if (widget.hideAnimationListener != null) {
-        _hideAnimation(former, newer);
+      if (widget.hideAnimationListener == null) {
+        return;
       }
+      _hideAnimation(former, newer);
     };
     KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
     KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
 
     ///no animation need
-    if (widget.showAnimationListener == null && widget.hideAnimationListener == null) {
+    if (widget.showAnimationListener == null &&
+        widget.hideAnimationListener == null) {
       return;
     }
 
@@ -221,31 +243,51 @@ class _KeyboardObserverState extends State<KeyboardObserver> with TickerProvider
         widget.hideAnimationListener?.call(_formerHeight, false);
       }
     };
-    _showAnimationController = AnimationController(
-      duration: widget.durationShow ?? const Duration(milliseconds: 500),
-      vsync: this,
-    );
-    _hideAnimationController = AnimationController(
-      duration: widget.durationHide ?? const Duration(milliseconds: 500),
-      vsync: this,
-    );
+    if (_showAnimationController != null) {
+      _showAnimationController!.duration = widget.durationShow;
+    } else {
+      _showAnimationController = AnimationController(
+        duration: widget.durationShow,
+        vsync: this,
+      );
+    }
+    if (_hideAnimationController != null) {
+      _hideAnimationController!.duration = widget.durationHide;
+    } else {
+      _hideAnimationController = AnimationController(
+        duration: widget.durationHide,
+        vsync: this,
+      );
+    }
   }
 
   ///使用系统自带的
   void _useMediaQuery() {
+    if (_showListener != null) {
+      KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
+    }
+    if (_hideListener != null) {
+      KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
+    }
+
     ///hide or show listener
-    _showListener ??= (double former, double newer, int time) {
+    _showListener = (double former, double newer, int time) {
       widget.showListener?.call(former, newer, time);
+      _mediaAnimEndValue = newer;
       _mediaAnimType = KeyboardAnimationType.show;
-      _mediaEndValue = newer;
     };
-    _hideListener ??= (double former, double newer, int time) {
+    _hideListener = (double former, double newer, int time) {
       widget.hideListener?.call(former, newer, time);
+      _mediaAnimEndValue = newer;
       _mediaAnimType = KeyboardAnimationType.hide;
-      _mediaEndValue = newer;
     };
     KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
     KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
+
+    _showAnimationController?.dispose();
+    _hideAnimationController?.dispose();
+    _showAnimationController = null;
+    _hideAnimationController = null;
   }
 
   ///animation
@@ -265,8 +307,12 @@ class _KeyboardObserverState extends State<KeyboardObserver> with TickerProvider
 
   //dispose
   void _disposeListeners() {
-    KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
-    KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
+    if (_showListener != null) {
+      KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
+    }
+    if (_hideListener != null) {
+      KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
+    }
     _showAnimationController?.dispose();
     _hideAnimationController?.dispose();
     _showAnimationController = null;
@@ -276,6 +322,7 @@ class _KeyboardObserverState extends State<KeyboardObserver> with TickerProvider
   //remove
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _disposeListeners();
     super.dispose();
   }
@@ -326,7 +373,7 @@ class _KeyboardObserverState extends State<KeyboardObserver> with TickerProvider
       _hideAnim = Tween<double>(begin: _formerHeight, end: newer).animate(
         CurvedAnimation(
           parent: _hideAnimationController!,
-          curve: widget.curveShow ?? const Cubic(0.34, 0.84, 0.12, 1.00),
+          curve: widget.curveHide ?? const Cubic(0.34, 0.84, 0.12, 1.00),
         ),
       );
       _hideAnim?.addListener(_hideAnimListener!);
@@ -338,27 +385,39 @@ class _KeyboardObserverState extends State<KeyboardObserver> with TickerProvider
 
   @override
   void didChangeMetrics() {
-    //这里是在build之外收到变化
-    final double inset = View.of(context).viewInsets.bottom / View.of(context).devicePixelRatio;
-
-    ///展示
-    if (_mediaAnimType == KeyboardAnimationType.show && _bottomPadding != inset) {
-      _bottomPadding = inset;
-      widget.showAnimationListener?.call(_bottomPadding, false);
-      if (_bottomPadding == _mediaEndValue) {
-        _mediaAnimType = null;
-        widget.showAnimationListener?.call(_bottomPadding, false);
-      }
+    if (!mounted) {
+      return;
     }
 
-    ///隐藏
-    if (_mediaAnimType == KeyboardAnimationType.hide && _bottomPadding != inset) {
-      _bottomPadding = inset;
-      widget.hideAnimationListener?.call(_bottomPadding, false);
-      if (_bottomPadding == _mediaEndValue) {
-        _mediaAnimType = null;
-        widget.hideAnimationListener?.call(_bottomPadding, true);
-      }
+    ///这里是在build之外收到变化
+    final view = View.of(context);
+    final inset = view.viewInsets.bottom / view.devicePixelRatio;
+
+    switch (_mediaAnimType) {
+      case KeyboardAnimationType.show:
+        if (_bottomPadding != inset) {
+          _bottomPadding = inset;
+          widget.showAnimationListener?.call(_bottomPadding, false);
+          final end = _mediaAnimEndValue;
+          if (end != null && (_bottomPadding - end).abs() < 0.5) {
+            _mediaAnimType = null;
+            widget.showAnimationListener?.call(_bottomPadding, true);
+          }
+        }
+        break;
+      case KeyboardAnimationType.hide:
+        if (_bottomPadding != inset) {
+          _bottomPadding = inset;
+          widget.hideAnimationListener?.call(_bottomPadding, false);
+          final end = _mediaAnimEndValue;
+          if (end != null && (_bottomPadding - end).abs() < 0.5) {
+            _mediaAnimType = null;
+            widget.hideAnimationListener?.call(_bottomPadding, true);
+          }
+        }
+        break;
+      default:
+        break;
     }
   }
 
