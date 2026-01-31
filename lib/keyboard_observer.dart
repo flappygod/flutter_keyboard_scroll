@@ -399,7 +399,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
           _bottomPadding = inset;
           widget.showAnimationListener?.call(_bottomPadding, false);
           final end = _mediaAnimEndValue;
-          if (end != null && (_bottomPadding - end).abs() < 0.5) {
+          if (end != null && (_bottomPadding - end).abs() < 0.1) {
             _mediaAnimType = null;
             widget.showAnimationListener?.call(_bottomPadding, true);
           }
@@ -410,7 +410,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
           _bottomPadding = inset;
           widget.hideAnimationListener?.call(_bottomPadding, false);
           final end = _mediaAnimEndValue;
-          if (end != null && (_bottomPadding - end).abs() < 0.5) {
+          if (end != null && (_bottomPadding - end).abs() < 0.1) {
             _mediaAnimType = null;
             widget.hideAnimationListener?.call(_bottomPadding, true);
           }
