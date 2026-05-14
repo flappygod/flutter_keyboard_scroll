@@ -1,31 +1,38 @@
+/// 键盘弹出时自动上推可滚动内容、管理输入框与 [KeyboardScrollController] 的库。
+library keyboard_scroll;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'keyboard_observer.dart';
 import 'dart:math';
 
-///动画模式
+/// 与 [KeyboardObserver] 一致的键盘动画驱动方式。
 enum KeyboardAnimationMode {
-  //模拟动画
+  /// 使用原生事件与本地动画控制器模拟 inset 变化。
   simulated,
-  //使用 MediaQuery.viewInsetsOf(context).bottom
-  mediaQuery
+
+  /// 跟随 [MediaQuery] / [View] 的 viewInsets 变化（更接近系统键盘动画）。
+  mediaQuery,
 }
 
-//type
+/// [KeyboardScroll] 根据何种范围计算需要上移的距离。
 enum KeyboardScrollType {
-  //all view
+  /// 按整页/整棵子树与键盘高度对齐（整块内容上移）。
   fitAllView,
-  //each text
+
+  /// 考虑所有已注册输入框的底部边距。
   fitAllTextField,
-  //each text
+
+  /// 仅考虑通过 [KeyboardScrollController.addTextFieldWrapper] 注册的输入框。
   fitAddedTextField,
 }
 
-///text field wrapper listener
+/// 某个 [TextFieldWrapper] 获得或失去焦点时的回调。
 typedef TextFieldWrapperListener = void Function(FocusNode focusNode);
 
-///text field wrapper
+/// 将 [FocusNode] 与用于测量位置的 [GlobalKey] 绑定，供 [KeyboardScrollController] 计算底部留白。
 class TextFieldWrapper {
+  /// 使用 [focusKey] 对应渲染对象底部到屏幕底边的距离参与滚动计算。
   TextFieldWrapper.fromKey({
     required this.focusNode,
     required this.focusKey,
@@ -43,16 +50,16 @@ class TextFieldWrapper {
   //focus change listener
   TextFieldWrapperListener? _focusChangedListener;
 
-  //key
+  /// 用于 [RenderBox] 定位的 [GlobalKey]，应挂在输入框或包裹输入框的组件上。
   GlobalKey focusKey;
 
-  //focus
+  /// 与 [focusKey] 绑定的焦点节点。
   FocusNode focusNode;
 
   //bottom
   double _bottom = 0;
 
-  //more
+  /// 在计算与屏幕底部距离时额外减去的偏移（逻辑像素），用于微调间距。
   double more;
 
   //refresh height
@@ -65,14 +72,17 @@ class TextFieldWrapper {
     }
   }
 
-  //get bottom
+  /// 返回当前测得的输入框底部到屏幕底边的距离减去 [more]。
   double getBottom() {
     return _bottom - more;
   }
 }
 
-//controller
+/// 持有已注册的 [TextFieldWrapper]，并在键盘高度变化时计算需要的底部上移量。
 class KeyboardScrollController {
+  /// 创建控制器；通过 [addTextFieldWrapper] 注册需要参与避让的输入框。
+  KeyboardScrollController();
+
   //当前的
   double _nowValue = 0;
 
@@ -86,7 +96,7 @@ class KeyboardScrollController {
   //listener
   TextFieldWrapperListener? _focusChangedListener;
 
-  //set focus listener
+  /// 当任一已包装输入框焦点变化时调用 [listener]。
   void setFocusListener(TextFieldWrapperListener listener) {
     _focusChangedListener = listener;
     for (int s = 0; s < _wrappers.length; s++) {
@@ -94,7 +104,7 @@ class KeyboardScrollController {
     }
   }
 
-  //add text field wrapper
+  /// 注册需要参与滚动计算的输入框。
   void addTextFieldWrapper(TextFieldWrapper wrapper) {
     if (!_wrappers.contains(wrapper)) {
       wrapper._focusChangedListener = _focusChangedListener;
@@ -102,7 +112,7 @@ class KeyboardScrollController {
     }
   }
 
-  //remove text field wrapper
+  /// 取消注册由 [addTextFieldWrapper] 添加的 [wrapper]。
   void removeTextFieldWrapper(TextFieldWrapper wrapper) {
     if (_wrappers.contains(wrapper)) {
       wrapper._focusChangedListener = null;
@@ -110,14 +120,14 @@ class KeyboardScrollController {
     }
   }
 
-  //refresh height
+  /// 重新测量所有已注册 [TextFieldWrapper] 的底部位置（通常在布局变化后调用）。
   void refreshHeights() {
     for (int s = 0; s < _wrappers.length; s++) {
       _wrappers[s]._refreshBottomHeight(_nowValue);
     }
   }
 
-  //get bottom margin
+  /// 当前获得焦点的输入框中，距离屏幕底边最近的一条边距；无焦点时可能为 null。
   double? getBottomNeedMargin() {
     double? smaller;
     for (int s = 0; s < _wrappers.length; s++) {
@@ -130,52 +140,55 @@ class KeyboardScrollController {
     return smaller;
   }
 
-  //set enable
+  /// 是否响应键盘与焦点变化；为 false 时不再更新位移。
   void setEnable(bool flag) {
     _enabled = flag;
   }
 
-  //get enable
+  /// 当前是否启用键盘滚动逻辑。
   bool isEnable() {
     return _enabled;
   }
 }
 
-//KeyBroadScroll widget
+/// 在键盘弹出时通过 [Transform.translate] 上推 [child]，避免输入框被遮挡。
+///
+/// 内部使用 [KeyboardObserver]；需配合 [KeyboardScrollController] 与若干 [TextFieldWrapper]（视 [fitType] 而定）。
 class KeyboardScroll extends StatefulWidget {
-  //close when tap
+  /// 轻点抬起且未发生明显移动时是否收起键盘（将焦点交给空 [FocusNode]）。
   final bool closeWhenTap;
 
-  //close when move
+  /// 发生拖拽移动时是否收起键盘。
   final bool closeWhenMove;
 
-  //child
+  /// 列表或表单等可滚动内容。
   final Widget child;
 
-  //controller
+  /// 共享的滚动控制器，用于注册输入框与开关。
   final KeyboardScrollController controller;
 
-  //type
+  /// 决定如何选取用于对齐的输入框与边距，见 [KeyboardScrollType]。
   final KeyboardScrollType fitType;
 
-  //use ios system animation
+  /// 传递给内部 [KeyboardObserver] 的动画模式。
   final KeyboardAnimationMode animationMode;
 
-  //listener
+  /// 键盘显示原生阶段回调，转发自内部 [KeyboardObserver]。
   final KeyboardObserverListener? showListener;
 
-  //hide listener
+  /// 键盘隐藏原生阶段回调。
   final KeyboardObserverListener? hideListener;
 
-  //animation listener
+  /// 键盘展开动画逐帧回调。
   final KeyboardAnimationListener? showAnimationListener;
 
-  //animation listener
+  /// 键盘收起动画逐帧回调。
   final KeyboardAnimationListener? hideAnimationListener;
 
-  //clip
+  /// [ClipRect] 的裁剪行为。
   final Clip clipBehavior;
 
+  /// 创建键盘避让滚动容器。
   const KeyboardScroll({
     Key? key,
     required this.controller,

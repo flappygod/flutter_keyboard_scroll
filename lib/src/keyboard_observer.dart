@@ -1,17 +1,31 @@
+/// 软键盘事件与 [KeyboardObserver] 动画相关的类型与工具。
+///
+/// 在 Android/iOS 上通过 [EventChannel] 接收原生键盘高度变化；Web 上部分能力不可用。
+library keyboard_observer;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'keyboard_scroll.dart';
 
-//animation mode
+/// 与 [MediaQuery] 底部 inset 动画阶段对应的键盘动画类型。
 enum KeyboardAnimationType {
+  /// 键盘展开或底部安全区增大过程中。
   show,
+
+  /// 键盘收起或底部安全区减小过程中。
   hide,
 }
 
+/// 注册/注销原生键盘显示与隐藏监听，并向 Dart 侧广播事件。
+///
+/// 仅使用静态方法；不要尝试实例化本类。
 class KeyboardObserveListenManager {
+  KeyboardObserveListenManager._();
+
   //eventChannel
-  static const EventChannel _eventChannel = EventChannel('keyboard_observer_event');
+  static const EventChannel _eventChannel =
+      EventChannel('keyboard_observer_event');
 
   //listen state
   static bool _listenState = false;
@@ -22,24 +36,24 @@ class KeyboardObserveListenManager {
   //hide start listener
   static final Set<KeyboardObserverListener> _hideListeners = {};
 
-  //add show listener
+  /// 注册键盘即将显示阶段的监听（原生 type == 2 时回调）。
   static void addKeyboardShowListener(KeyboardObserverListener listener) {
     _showListeners.add(listener);
     _checkListeners();
   }
 
-  //add hide listener
+  /// 注册键盘即将隐藏阶段的监听（原生 type == 3 时回调）。
   static void addKeyboardHideListener(KeyboardObserverListener listener) {
     _hideListeners.add(listener);
     _checkListeners();
   }
 
-  //remove show listener
+  /// 移除由 [addKeyboardShowListener] 注册的监听。
   static void removeKeyboardShowListener(KeyboardObserverListener listener) {
     _showListeners.remove(listener);
   }
 
-  //remove hide listener
+  /// 移除由 [addKeyboardHideListener] 注册的监听。
   static void removeKeyboardHideListener(KeyboardObserverListener listener) {
     _hideListeners.remove(listener);
   }
@@ -50,7 +64,10 @@ class KeyboardObserveListenManager {
       return;
     }
     _listenState = true;
-    _eventChannel.receiveBroadcastStream().map((result) => result as Map).listen((data) {
+    _eventChannel
+        .receiveBroadcastStream()
+        .map((result) => result as Map)
+        .listen((data) {
       //软键盘弹出
       if (data["type"] == 2) {
         for (KeyboardObserverListener listener in _showListeners) {
@@ -75,45 +92,46 @@ class KeyboardObserveListenManager {
   }
 }
 
-//start listener
-typedef KeyboardObserverListener = Function(double former, double newer, int time);
+/// 键盘显示或隐藏时触发，参数为上一帧高度 [former]、当前目标高度 [newer] 与动画时长 [time]（毫秒）。
+typedef KeyboardObserverListener = Function(
+    double former, double newer, int time);
 
-//animation value listener
+/// 键盘动画过程中底部 inset 回调：[bottomInsets] 为当前值，[end] 为 true 表示本段动画结束。
 typedef KeyboardAnimationListener = Function(double bottomInsets, bool end);
 
-//observer
+/// 包裹子组件以监听软键盘显示/隐藏，并可选择模拟或跟随系统 inset 动画。
 class KeyboardObserver extends StatefulWidget {
-  //child
+  /// 子组件。
   final Widget? child;
 
-  //curve show
+  /// 键盘展开动画曲线；为 null 时使用默认 Cubic。
   final Curve? curveShow;
 
-  //animation duration show
+  /// 键盘展开动画时长。
   final Duration durationShow;
 
-  //curve
+  /// 键盘收起动画曲线；为 null 时使用默认 Cubic。
   final Curve? curveHide;
 
-  //animation duration hide
+  /// 键盘收起动画时长。
   final Duration durationHide;
 
-  //if true , we will use ios system animation
+  /// 动画驱动方式：模拟插值或跟随 [MediaQuery] 变化。
   final KeyboardAnimationMode animationMode;
 
-  //listener
+  /// 键盘显示阶段原生回调。
   final KeyboardObserverListener? showListener;
 
-  //hide listener
+  /// 键盘隐藏阶段原生回调。
   final KeyboardObserverListener? hideListener;
 
-  //animation listener
+  /// 键盘展开过程中逐帧 inset 回调（需与 [animationMode] 配合）。
   final KeyboardAnimationListener? showAnimationListener;
 
-  //animation listener
+  /// 键盘收起过程中逐帧 inset 回调（需与 [animationMode] 配合）。
   final KeyboardAnimationListener? hideAnimationListener;
 
-  //add key
+  /// 创建键盘观察者。
   const KeyboardObserver({
     Key? key,
     this.child,
@@ -135,7 +153,8 @@ class KeyboardObserver extends StatefulWidget {
 }
 
 //state
-class _KeyboardObserverState extends State<KeyboardObserver> with TickerProviderStateMixin, WidgetsBindingObserver {
+class _KeyboardObserverState extends State<KeyboardObserver>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   //show animation controller
   AnimationController? _showAnimationController;
 
@@ -219,7 +238,8 @@ class _KeyboardObserverState extends State<KeyboardObserver> with TickerProvider
     KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
 
     ///no animation need
-    if (widget.showAnimationListener == null && widget.hideAnimationListener == null) {
+    if (widget.showAnimationListener == null &&
+        widget.hideAnimationListener == null) {
       return;
     }
 
