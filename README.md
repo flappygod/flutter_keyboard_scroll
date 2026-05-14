@@ -1,6 +1,17 @@
 # flutter_keyboard_scroll
 
-在 Flutter 中监听系统软键盘的显示与隐藏，并在键盘遮挡输入区域时上推页面或可滚动内容。支持 Android 与 iOS（通过原生 `EventChannel`）；Web 不支持。
+在 Flutter 中监听系统软键盘的显示与隐藏，并在键盘遮挡输入区域时上推页面或可滚动内容。实现依赖 Android / iOS 原生侧与 Dart 侧 `EventChannel` 协同。
+
+## 支持平台
+
+| 平台 | 说明 |
+| --- | --- |
+| **Android** | 支持，一等能力目标。 |
+| **iOS** | 支持，一等能力目标。 |
+| **Web** | 不在支持范围；本包未提供 Web 插件实现。 |
+| **Windows / macOS / Linux** | 不在支持范围；桌面端无对应原生键盘通道，**多平台工程请按平台选用或自行降级**（勿在桌面目标上依赖本库的键盘事件）。 |
+
+若应用同时面向移动端与桌面/Web，建议在业务层用 `defaultTargetPlatform`、`Theme.of(context).platform` 或编译期条件导入，仅在 Android、iOS 上使用本包相关 API。
 
 ## 安装
 
