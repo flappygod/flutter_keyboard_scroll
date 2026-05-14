@@ -1,4 +1,3 @@
-## 1.0.22
+## 1.0.23
 
-* Use KeyboardAnimationMode.simulated to simulated keyboard animation.
-* Use KeyboardAnimationMode.mediaQuery to observe bottom insets.
+* Change source code package, use import 'package:flutter_keyboard_scroll/flutter_keyboard_scroll.dart'; to import.

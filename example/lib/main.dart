@@ -1,8 +1,6 @@
+import 'package:flutter_keyboard_scroll/flutter_keyboard_scroll.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
-
-import 'package:flutter_keyboard_scroll/keyboard_observer.dart';
-import 'package:flutter_keyboard_scroll/keyboard_scroll.dart';
 
 void main() {
   runApp(const MyApp());

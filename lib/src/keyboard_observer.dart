@@ -11,8 +11,7 @@ enum KeyboardAnimationType {
 
 class KeyboardObserveListenManager {
   //eventChannel
-  static const EventChannel _eventChannel =
-      EventChannel('keyboard_observer_event');
+  static const EventChannel _eventChannel = EventChannel('keyboard_observer_event');
 
   //listen state
   static bool _listenState = false;
@@ -51,10 +50,7 @@ class KeyboardObserveListenManager {
       return;
     }
     _listenState = true;
-    _eventChannel
-        .receiveBroadcastStream()
-        .map((result) => result as Map)
-        .listen((data) {
+    _eventChannel.receiveBroadcastStream().map((result) => result as Map).listen((data) {
       //软键盘弹出
       if (data["type"] == 2) {
         for (KeyboardObserverListener listener in _showListeners) {
@@ -80,8 +76,7 @@ class KeyboardObserveListenManager {
 }
 
 //start listener
-typedef KeyboardObserverListener = Function(
-    double former, double newer, int time);
+typedef KeyboardObserverListener = Function(double former, double newer, int time);
 
 //animation value listener
 typedef KeyboardAnimationListener = Function(double bottomInsets, bool end);
@@ -140,8 +135,7 @@ class KeyboardObserver extends StatefulWidget {
 }
 
 //state
-class _KeyboardObserverState extends State<KeyboardObserver>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+class _KeyboardObserverState extends State<KeyboardObserver> with TickerProviderStateMixin, WidgetsBindingObserver {
   //show animation controller
   AnimationController? _showAnimationController;
 
@@ -225,8 +219,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
 
     ///no animation need
-    if (widget.showAnimationListener == null &&
-        widget.hideAnimationListener == null) {
+    if (widget.showAnimationListener == null && widget.hideAnimationListener == null) {
       return;
     }
 
