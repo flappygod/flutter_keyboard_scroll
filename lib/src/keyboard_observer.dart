@@ -3,11 +3,12 @@
 /// 在 Android/iOS 上通过 [EventChannel] 接收原生键盘高度变化；Web 上部分能力不可用。
 library keyboard_observer;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'keyboard_scroll.dart';
-import 'dart:async';
 
 /// 与 [MediaQuery] 底部 inset 动画阶段对应的键盘动画类型。
 enum KeyboardAnimationType {
@@ -194,6 +195,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   double? _pendingBottomPadding;
   Timer? _pendingMetricsTimer;
 
+  //media query finish fallback timer
+  Timer? _mediaAnimFinishTimer;
+
   //init state
   @override
   void initState() {
@@ -212,6 +216,42 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     }
   }
 
+  void _cancelMediaAnimFinishTimer() {
+    _mediaAnimFinishTimer?.cancel();
+    _mediaAnimFinishTimer = null;
+  }
+
+  /// 启动 mediaQuery 模式下的动画结束兜底定时器。
+  ///
+  /// 某些设备上 `didChangeMetrics` 的最终 inset 可能与原生事件中的目标值
+  /// 存在少量误差，导致无法通过 `abs(current - end) < 1` 正常判定结束；
+  /// 也可能出现只收到少量帧甚至最后一帧的情况。
+  ///
+  /// 因此每次收到新的 mediaQuery inset 变化时都会重置该定时器：
+  /// - 若 200ms 内继续收到新的 metrics，说明动画仍在进行，继续等待；
+  /// - 若 200ms 内没有新的 metrics，则认为本段键盘动画已经结束，
+  ///   主动回调 `end = true` 并清空 `_mediaAnimType`，避免状态卡住。
+  void _startMediaAnimFinishTimer() {
+    _cancelMediaAnimFinishTimer();
+    _mediaAnimFinishTimer = Timer(const Duration(milliseconds: 200), () {
+      if (!mounted || _mediaAnimType == null) {
+        return;
+      }
+      final type = _mediaAnimType!;
+      final value = _bottomPadding;
+      _mediaAnimType = null;
+      _mediaAnimEndValue = null;
+      switch (type) {
+        case KeyboardAnimationType.show:
+          widget.showAnimationListener?.call(value, true);
+          break;
+        case KeyboardAnimationType.hide:
+          widget.hideAnimationListener?.call(value, true);
+          break;
+      }
+    });
+  }
+
   ///使用模拟的方式
   void _useSimulated() {
     _mediaAnimType = null;
@@ -219,6 +259,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _pendingBottomPadding = null;
     _pendingMetricsTimer?.cancel();
     _pendingMetricsTimer = null;
+    _cancelMediaAnimFinishTimer();
 
     if (_showListener != null) {
       KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
@@ -287,6 +328,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _pendingBottomPadding = null;
     _pendingMetricsTimer?.cancel();
     _pendingMetricsTimer = null;
+    _cancelMediaAnimFinishTimer();
 
     if (_showListener != null) {
       KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
@@ -302,13 +344,16 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       _mediaAnimType = KeyboardAnimationType.show;
       _pendingMetricsTimer?.cancel();
       _pendingMetricsTimer = null;
+      _startMediaAnimFinishTimer();
       if (_pendingBottomPadding != null) {
         _bottomPadding = _pendingBottomPadding!;
         widget.showAnimationListener?.call(_bottomPadding, false);
         final end = _mediaAnimEndValue;
         _pendingBottomPadding = null;
-        if (end != null && (_bottomPadding - end).abs() < 0.1) {
+        if (end != null && (_bottomPadding - end).abs() < 1) {
+          _cancelMediaAnimFinishTimer();
           _mediaAnimType = null;
+          _mediaAnimEndValue = null;
           widget.showAnimationListener?.call(_bottomPadding, true);
         }
       }
@@ -319,13 +364,16 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       _mediaAnimType = KeyboardAnimationType.hide;
       _pendingMetricsTimer?.cancel();
       _pendingMetricsTimer = null;
+      _startMediaAnimFinishTimer();
       if (_pendingBottomPadding != null) {
         _bottomPadding = _pendingBottomPadding!;
         widget.hideAnimationListener?.call(_bottomPadding, false);
         final end = _mediaAnimEndValue;
         _pendingBottomPadding = null;
-        if (end != null && (_bottomPadding - end).abs() < 0.1) {
+        if (end != null && (_bottomPadding - end).abs() < 1) {
+          _cancelMediaAnimFinishTimer();
           _mediaAnimType = null;
+          _mediaAnimEndValue = null;
           widget.hideAnimationListener?.call(_bottomPadding, true);
         }
       }
@@ -365,6 +413,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _pendingMetricsTimer?.cancel();
     _pendingMetricsTimer = null;
     _pendingBottomPadding = null;
+    _cancelMediaAnimFinishTimer();
     _showAnimationController?.dispose();
     _hideAnimationController?.dispose();
     _showAnimationController = null;
@@ -450,9 +499,12 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         if (_bottomPadding != inset) {
           _bottomPadding = inset;
           widget.showAnimationListener?.call(_bottomPadding, false);
+          _startMediaAnimFinishTimer();
           final end = _mediaAnimEndValue;
-          if (end != null && (_bottomPadding - end).abs() < 0.1) {
+          if (end != null && (_bottomPadding - end).abs() < 1) {
+            _cancelMediaAnimFinishTimer();
             _mediaAnimType = null;
+            _mediaAnimEndValue = null;
             widget.showAnimationListener?.call(_bottomPadding, true);
           }
         }
@@ -461,9 +513,12 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         if (_bottomPadding != inset) {
           _bottomPadding = inset;
           widget.hideAnimationListener?.call(_bottomPadding, false);
+          _startMediaAnimFinishTimer();
           final end = _mediaAnimEndValue;
-          if (end != null && (_bottomPadding - end).abs() < 0.1) {
+          if (end != null && (_bottomPadding - end).abs() < 1) {
+            _cancelMediaAnimFinishTimer();
             _mediaAnimType = null;
+            _mediaAnimEndValue = null;
             widget.hideAnimationListener?.call(_bottomPadding, true);
           }
         }
@@ -472,7 +527,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         if (_bottomPadding != inset) {
           _pendingBottomPadding = inset;
           _pendingMetricsTimer?.cancel();
-          _pendingMetricsTimer = Timer(const Duration(milliseconds: 300), () {
+          _pendingMetricsTimer = Timer(const Duration(milliseconds: 500), () {
             _pendingBottomPadding = null;
             _pendingMetricsTimer = null;
           });
