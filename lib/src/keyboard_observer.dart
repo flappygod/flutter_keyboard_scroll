@@ -3,10 +3,12 @@
 /// 在 Android/iOS 上通过 [EventChannel] 接收原生键盘高度变化；Web 上部分能力不可用。
 library keyboard_observer;
 
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'keyboard_scroll.dart';
+import 'dart:async';
 
 /// 与 [MediaQuery] 底部 inset 动画阶段对应的键盘动画类型。
 enum KeyboardAnimationType {
@@ -189,6 +191,10 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   KeyboardAnimationType? _mediaAnimType;
   double? _mediaAnimEndValue;
 
+  //pending media query metrics
+  double? _pendingBottomPadding;
+  Timer? _pendingMetricsTimer;
+
   //init state
   @override
   void initState() {
@@ -211,6 +217,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   void _useSimulated() {
     _mediaAnimType = null;
     _mediaAnimEndValue = null;
+    _pendingBottomPadding = null;
+    _pendingMetricsTimer?.cancel();
+    _pendingMetricsTimer = null;
 
     if (_showListener != null) {
       KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
@@ -276,6 +285,10 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
   ///使用系统自带的
   void _useMediaQuery() {
+    _pendingBottomPadding = null;
+    _pendingMetricsTimer?.cancel();
+    _pendingMetricsTimer = null;
+
     if (_showListener != null) {
       KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
     }
@@ -288,11 +301,35 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       widget.showListener?.call(former, newer, time);
       _mediaAnimEndValue = newer;
       _mediaAnimType = KeyboardAnimationType.show;
+      _pendingMetricsTimer?.cancel();
+      _pendingMetricsTimer = null;
+      if (_pendingBottomPadding != null) {
+        _bottomPadding = _pendingBottomPadding!;
+        widget.showAnimationListener?.call(_bottomPadding, false);
+        final end = _mediaAnimEndValue;
+        _pendingBottomPadding = null;
+        if (end != null && (_bottomPadding - end).abs() < 0.1) {
+          _mediaAnimType = null;
+          widget.showAnimationListener?.call(_bottomPadding, true);
+        }
+      }
     };
     _hideListener = (double former, double newer, int time) {
       widget.hideListener?.call(former, newer, time);
       _mediaAnimEndValue = newer;
       _mediaAnimType = KeyboardAnimationType.hide;
+      _pendingMetricsTimer?.cancel();
+      _pendingMetricsTimer = null;
+      if (_pendingBottomPadding != null) {
+        _bottomPadding = _pendingBottomPadding!;
+        widget.hideAnimationListener?.call(_bottomPadding, false);
+        final end = _mediaAnimEndValue;
+        _pendingBottomPadding = null;
+        if (end != null && (_bottomPadding - end).abs() < 0.1) {
+          _mediaAnimType = null;
+          widget.hideAnimationListener?.call(_bottomPadding, true);
+        }
+      }
     };
     KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
     KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
@@ -326,6 +363,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (_hideListener != null) {
       KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
     }
+    _pendingMetricsTimer?.cancel();
+    _pendingMetricsTimer = null;
+    _pendingBottomPadding = null;
     _showAnimationController?.dispose();
     _hideAnimationController?.dispose();
     _showAnimationController = null;
@@ -430,6 +470,14 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         }
         break;
       default:
+        if (_bottomPadding != inset) {
+          _pendingBottomPadding = inset;
+          _pendingMetricsTimer?.cancel();
+          _pendingMetricsTimer = Timer(const Duration(milliseconds: 300), () {
+            _pendingBottomPadding = null;
+            _pendingMetricsTimer = null;
+          });
+        }
         break;
     }
   }
