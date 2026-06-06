@@ -25,17 +25,17 @@ enum KeyboardAnimationType {
 class KeyboardObserveListenManager {
   KeyboardObserveListenManager._();
 
-  //eventChannel
+  /// 与 Android/iOS 原生侧通信的广播通道。
   static const EventChannel _eventChannel =
       EventChannel('keyboard_observer_event');
 
-  //listen state
+  /// 是否已订阅 [_eventChannel]；全局只建立一次订阅。
   static bool _listenState = false;
 
-  //show start listener
+  /// 键盘显示（type == 2）回调集合。
   static final Set<KeyboardObserverListener> _showListeners = {};
 
-  //hide start listener
+  /// 键盘隐藏（type == 3）回调集合。
   static final Set<KeyboardObserverListener> _hideListeners = {};
 
   /// 注册键盘即将显示阶段的监听（原生 type == 2 时回调）。
@@ -60,7 +60,7 @@ class KeyboardObserveListenManager {
     _hideListeners.remove(listener);
   }
 
-  //check listeners
+  /// 在首次注册监听时订阅原生广播，并按 type 分发给对应集合。
   static void _checkListeners() {
     if (_listenState) {
       return;
@@ -70,7 +70,7 @@ class KeyboardObserveListenManager {
         .receiveBroadcastStream()
         .map((result) => result as Map)
         .listen((data) {
-      //软键盘弹出
+      // type == 2：软键盘弹出
       if (data["type"] == 2) {
         for (KeyboardObserverListener listener in _showListeners) {
           listener(
@@ -80,7 +80,7 @@ class KeyboardObserveListenManager {
           );
         }
       }
-      //软键盘收起
+      // type == 3：软键盘收起
       if (data["type"] == 3) {
         for (KeyboardObserverListener listener in _hideListeners) {
           listener(
@@ -100,6 +100,26 @@ typedef KeyboardObserverListener = Function(
 
 /// 键盘动画过程中底部 inset 回调：[bottomInsets] 为当前值，[end] 为 true 表示本段动画结束。
 typedef KeyboardAnimationListener = Function(double bottomInsets, bool end);
+
+/// 取消上一次未触发的回调，再调度新的延迟任务（debounce）。
+class _Debouncer {
+  Timer? _timer;
+
+  /// 重置计时：取消旧 [Timer]，在 [delay] 后执行 [action]。
+  void run(Duration delay, VoidCallback action) {
+    _timer?.cancel();
+    _timer = Timer(delay, () {
+      _timer = null;
+      action();
+    });
+  }
+
+  /// 取消尚未触发的延迟任务。
+  void cancel() {
+    _timer?.cancel();
+    _timer = null;
+  }
+}
 
 /// 包裹子组件以监听软键盘显示/隐藏，并可选择模拟或跟随系统 inset 动画。
 class KeyboardObserver extends StatefulWidget {
@@ -154,51 +174,63 @@ class KeyboardObserver extends StatefulWidget {
   }
 }
 
-//state
+/// [KeyboardObserver] 的状态：按 [KeyboardAnimationMode] 选择模拟动画或跟随系统 inset。
 class _KeyboardObserverState extends State<KeyboardObserver>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  //show animation controller
+  /// [KeyboardAnimationMode.simulated] 下键盘展开动画控制器。
   AnimationController? _showAnimationController;
 
-  //hide  animation controller
+  /// [KeyboardAnimationMode.simulated] 下键盘收起动画控制器。
   AnimationController? _hideAnimationController;
 
-  //former height
+  /// 模拟动画当前插值高度，用于下一段 Tween 的 begin。
   double _formerHeight = 0;
 
-  //show anim listener
+  /// 展开动画每帧监听，转发给 [KeyboardObserver.showAnimationListener]。
   VoidCallback? _showAnimListener;
 
-  //hide anim listener
+  /// 收起动画每帧监听，转发给 [KeyboardObserver.hideAnimationListener]。
   VoidCallback? _hideAnimListener;
 
-  //show listener
+  /// 注册到 [KeyboardObserveListenManager] 的显示阶段闭包。
   KeyboardObserverListener? _showListener;
 
-  //hide listener
+  /// 注册到 [KeyboardObserveListenManager] 的隐藏阶段闭包。
   KeyboardObserverListener? _hideListener;
 
-  //show anim
+  /// 当前展开方向的高度 Tween。
   Animation<double>? _showAnim;
 
-  //hide anim
+  /// 当前收起方向的高度 Tween。
   Animation<double>? _hideAnim;
 
-  //bottom padding
+  /// [KeyboardAnimationMode.mediaQuery] 下最近一次有效的底部 inset（逻辑像素）。
   double _bottomPadding = 0;
 
-  //type
+  /// mediaQuery 模式下当前键盘动画方向；null 表示无进行中的动画段。
   KeyboardAnimationType? _mediaAnimType;
+
+  /// 原生事件给出的本段动画目标底部 inset。
   double? _mediaAnimEndValue;
 
-  //pending media query metrics
+  /// 在原生事件到达前，由 [didChangeMetrics] 暂存的底部 inset（处理竞态）。
   double? _pendingBottomPadding;
-  Timer? _pendingMetricsTimer;
 
-  //media query finish fallback timer
-  Timer? _mediaAnimFinishTimer;
+  /// 无动画方向时，暂存 [_pendingBottomPadding] 的有效期 debounce。
+  final _pendingMetricsDebouncer = _Debouncer();
 
-  //init state
+  /// mediaQuery 模式下判定「动画已结束」的兜底 debounce。
+  final _mediaAnimFinishDebouncer = _Debouncer();
+
+  /// 连续 [_mediaAnimFinishDelay] 无新 metrics 则视为动画结束。
+  static const Duration _mediaAnimFinishDelay = Duration(milliseconds: 200);
+
+  /// [_pendingBottomPadding] 超过该时间未被消费则丢弃。
+  static const Duration _pendingMetricsDelay = Duration(milliseconds: 500);
+
+  /// 当前 inset 与 [_mediaAnimEndValue] 相差小于该值时认为已到达终点。
+  static const double _mediaAnimEndTolerance = 1;
+
   @override
   void initState() {
     super.initState();
@@ -209,16 +241,28 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   @override
   void didUpdateWidget(KeyboardObserver oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.durationShow != oldWidget.durationShow ||
-        widget.durationHide != oldWidget.durationHide ||
-        widget.animationMode != oldWidget.animationMode) {
+    if (widget.animationMode != oldWidget.animationMode) {
       _initListeners();
+      return;
+    }
+
+    ///mediaQuery 不使用 duration；仅 simulated 下同步 AnimationController 时长。
+    if (widget.animationMode == KeyboardAnimationMode.simulated &&
+        (widget.durationShow != oldWidget.durationShow ||
+            widget.durationHide != oldWidget.durationHide)) {
+      _updateSimulatedDurations();
     }
   }
 
+  /// [KeyboardAnimationMode.simulated] 下仅更新动画时长，避免打断进行中的键盘动画段。
+  void _updateSimulatedDurations() {
+    _showAnimationController?.duration = widget.durationShow;
+    _hideAnimationController?.duration = widget.durationHide;
+  }
+
+  /// 取消 mediaQuery 结束兜底定时器（已精确判定结束时调用）。
   void _cancelMediaAnimFinishTimer() {
-    _mediaAnimFinishTimer?.cancel();
-    _mediaAnimFinishTimer = null;
+    _mediaAnimFinishDebouncer.cancel();
   }
 
   /// 启动 mediaQuery 模式下的动画结束兜底定时器。
@@ -228,12 +272,11 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   /// 也可能出现只收到少量帧甚至最后一帧的情况。
   ///
   /// 因此每次收到新的 mediaQuery inset 变化时都会重置该定时器：
-  /// - 若 200ms 内继续收到新的 metrics，说明动画仍在进行，继续等待；
-  /// - 若 200ms 内没有新的 metrics，则认为本段键盘动画已经结束，
+  /// - 若 [_mediaAnimFinishDelay] 内继续收到新的 metrics，说明动画仍在进行，继续等待；
+  /// - 若窗口内没有新的 metrics，则认为本段键盘动画已经结束，
   ///   主动回调 `end = true` 并清空 `_mediaAnimType`，避免状态卡住。
   void _startMediaAnimFinishTimer() {
-    _cancelMediaAnimFinishTimer();
-    _mediaAnimFinishTimer = Timer(const Duration(milliseconds: 200), () {
+    _mediaAnimFinishDebouncer.run(_mediaAnimFinishDelay, () {
       if (!mounted || _mediaAnimType == null) {
         return;
       }
@@ -252,13 +295,89 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     });
   }
 
-  ///使用模拟的方式
+  /// 当前 inset 是否已接近原生上报的目标高度。
+  bool _hasReachedMediaAnimEnd(double current) {
+    final end = _mediaAnimEndValue;
+    return end != null && (current - end).abs() < _mediaAnimEndTolerance;
+  }
+
+  /// 若已到达目标高度，触发 `end = true` 并清理 mediaQuery 动画状态。
+  void _finishMediaAnimIfReached(double current) {
+    if (!_hasReachedMediaAnimEnd(current)) {
+      return;
+    }
+    _cancelMediaAnimFinishTimer();
+    final type = _mediaAnimType;
+    _mediaAnimType = null;
+    _mediaAnimEndValue = null;
+    switch (type) {
+      case KeyboardAnimationType.show:
+        widget.showAnimationListener?.call(current, true);
+        break;
+      case KeyboardAnimationType.hide:
+        widget.hideAnimationListener?.call(current, true);
+        break;
+      case null:
+        break;
+    }
+  }
+
+  /// 处理原生键盘显示/隐藏事件：记录方向与目标值，并消费可能已缓存的 metrics。
+  void _onMediaQueryKeyboardEvent({
+    required KeyboardAnimationType type,
+    required KeyboardObserverListener? userListener,
+    required KeyboardAnimationListener? animationListener,
+    required double former,
+    required double newer,
+    required int time,
+  }) {
+    userListener?.call(former, newer, time);
+    _mediaAnimEndValue = newer;
+    _mediaAnimType = type;
+    _pendingMetricsDebouncer.cancel();
+    _startMediaAnimFinishTimer();
+    final pending = _pendingBottomPadding;
+    if (pending == null) {
+      return;
+    }
+    _bottomPadding = pending;
+    _pendingBottomPadding = null;
+    animationListener?.call(_bottomPadding, false);
+    _finishMediaAnimIfReached(_bottomPadding);
+  }
+
+  /// 在 [didChangeMetrics] 中应用新的底部 inset，驱动逐帧回调或暂存 pending。
+  void _applyMediaQueryInset(double inset) {
+    if (_bottomPadding == inset) {
+      return;
+    }
+    _bottomPadding = inset;
+    switch (_mediaAnimType) {
+      case KeyboardAnimationType.show:
+        widget.showAnimationListener?.call(_bottomPadding, false);
+        _startMediaAnimFinishTimer();
+        _finishMediaAnimIfReached(_bottomPadding);
+        break;
+      case KeyboardAnimationType.hide:
+        widget.hideAnimationListener?.call(_bottomPadding, false);
+        _startMediaAnimFinishTimer();
+        _finishMediaAnimIfReached(_bottomPadding);
+        break;
+      case null:
+        _pendingBottomPadding = inset;
+        _pendingMetricsDebouncer.run(_pendingMetricsDelay, () {
+          _pendingBottomPadding = null;
+        });
+        break;
+    }
+  }
+
+  /// 切换到 [KeyboardAnimationMode.simulated]：用 [AnimationController] 插值 inset。
   void _useSimulated() {
     _mediaAnimType = null;
     _mediaAnimEndValue = null;
     _pendingBottomPadding = null;
-    _pendingMetricsTimer?.cancel();
-    _pendingMetricsTimer = null;
+    _pendingMetricsDebouncer.cancel();
     _cancelMediaAnimFinishTimer();
 
     if (_showListener != null) {
@@ -268,7 +387,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
     }
 
-    ///hide or show listener
     _showListener = (double former, double newer, int time) {
       widget.showListener?.call(former, newer, time);
       if (widget.showAnimationListener == null) {
@@ -286,13 +404,12 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
     KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
 
-    ///no animation need
+    // 未配置动画监听时，仅需原生 show/hide 回调，无需创建 AnimationController。
     if (widget.showAnimationListener == null &&
         widget.hideAnimationListener == null) {
       return;
     }
 
-    ///hide or show animation listener
     _showAnimListener ??= () {
       if (_formerHeight != _showAnim!.value) {
         _formerHeight = _showAnim!.value;
@@ -323,11 +440,12 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     }
   }
 
-  ///使用系统自带的
+  /// 切换到 [KeyboardAnimationMode.mediaQuery]：逐帧 inset 来自 [didChangeMetrics]。
   void _useMediaQuery() {
+    _mediaAnimType = null;
+    _mediaAnimEndValue = null;
     _pendingBottomPadding = null;
-    _pendingMetricsTimer?.cancel();
-    _pendingMetricsTimer = null;
+    _pendingMetricsDebouncer.cancel();
     _cancelMediaAnimFinishTimer();
 
     if (_showListener != null) {
@@ -337,58 +455,39 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
     }
 
-    ///hide or show listener
     _showListener = (double former, double newer, int time) {
-      widget.showListener?.call(former, newer, time);
-      _mediaAnimEndValue = newer;
-      _mediaAnimType = KeyboardAnimationType.show;
-      _pendingMetricsTimer?.cancel();
-      _pendingMetricsTimer = null;
-      _startMediaAnimFinishTimer();
-      if (_pendingBottomPadding != null) {
-        _bottomPadding = _pendingBottomPadding!;
-        widget.showAnimationListener?.call(_bottomPadding, false);
-        final end = _mediaAnimEndValue;
-        _pendingBottomPadding = null;
-        if (end != null && (_bottomPadding - end).abs() < 1) {
-          _cancelMediaAnimFinishTimer();
-          _mediaAnimType = null;
-          _mediaAnimEndValue = null;
-          widget.showAnimationListener?.call(_bottomPadding, true);
-        }
-      }
+      _onMediaQueryKeyboardEvent(
+        type: KeyboardAnimationType.show,
+        userListener: widget.showListener,
+        animationListener: widget.showAnimationListener,
+        former: former,
+        newer: newer,
+        time: time,
+      );
     };
     _hideListener = (double former, double newer, int time) {
-      widget.hideListener?.call(former, newer, time);
-      _mediaAnimEndValue = newer;
-      _mediaAnimType = KeyboardAnimationType.hide;
-      _pendingMetricsTimer?.cancel();
-      _pendingMetricsTimer = null;
-      _startMediaAnimFinishTimer();
-      if (_pendingBottomPadding != null) {
-        _bottomPadding = _pendingBottomPadding!;
-        widget.hideAnimationListener?.call(_bottomPadding, false);
-        final end = _mediaAnimEndValue;
-        _pendingBottomPadding = null;
-        if (end != null && (_bottomPadding - end).abs() < 1) {
-          _cancelMediaAnimFinishTimer();
-          _mediaAnimType = null;
-          _mediaAnimEndValue = null;
-          widget.hideAnimationListener?.call(_bottomPadding, true);
-        }
-      }
+      _onMediaQueryKeyboardEvent(
+        type: KeyboardAnimationType.hide,
+        userListener: widget.hideListener,
+        animationListener: widget.hideAnimationListener,
+        former: former,
+        newer: newer,
+        time: time,
+      );
     };
     KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
     KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
 
+    // mediaQuery 模式不依赖本地 AnimationController。
     _showAnimationController?.dispose();
     _hideAnimationController?.dispose();
     _showAnimationController = null;
     _hideAnimationController = null;
   }
 
-  ///animation
+  /// 按 [widget.animationMode] 注册原生监听并初始化对应模式的内部状态。
   void _initListeners() {
+    // Web 无原生 EventChannel 实现，直接跳过。
     if (kIsWeb) {
       return;
     }
@@ -402,7 +501,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     }
   }
 
-  //dispose
+  /// 注销原生监听、取消 debounce、释放 [AnimationController]。
   void _disposeListeners() {
     if (_showListener != null) {
       KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
@@ -410,8 +509,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (_hideListener != null) {
       KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
     }
-    _pendingMetricsTimer?.cancel();
-    _pendingMetricsTimer = null;
+    _pendingMetricsDebouncer.cancel();
     _pendingBottomPadding = null;
     _cancelMediaAnimFinishTimer();
     _showAnimationController?.dispose();
@@ -420,7 +518,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _hideAnimationController = null;
   }
 
-  //remove
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -428,7 +525,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     super.dispose();
   }
 
-  ///show animation
+  /// 从 [_formerHeight] 插值到 [newer]，驱动键盘展开动画。
+  ///
+  /// [former] 来自原生事件，当前实现以 [_formerHeight] 为 Tween 起点以衔接上一段动画。
   void _showAnimation(double former, double newer) {
     if (_hideAnimListener != null) {
       _hideAnim?.removeListener(_hideAnimListener!);
@@ -436,12 +535,11 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (_showAnimListener != null) {
       _showAnim?.removeListener(_showAnimListener!);
     }
-    //stop former
+    // 打断可能仍在进行的反向动画
     _hideAnimationController?.stop();
     _showAnimationController?.stop();
     _hideAnimationController?.reset();
     _showAnimationController?.reset();
-    //start animation
     if (_showAnimationController != null) {
       _showAnim = Tween<double>(begin: _formerHeight, end: newer).animate(
         CurvedAnimation(
@@ -456,7 +554,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     }
   }
 
-  ///hide animation
+  /// 从 [_formerHeight] 插值到 [newer]，驱动键盘收起动画。
+  ///
+  /// [former] 来自原生事件，当前实现以 [_formerHeight] 为 Tween 起点以衔接上一段动画。
   void _hideAnimation(double former, double newer) {
     if (_hideAnimListener != null) {
       _hideAnim?.removeListener(_hideAnimListener!);
@@ -464,12 +564,11 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (_showAnimListener != null) {
       _showAnim?.removeListener(_showAnimListener!);
     }
-    //stop former
+    // 打断可能仍在进行的反向动画
     _hideAnimationController?.stop();
     _showAnimationController?.stop();
     _showAnimationController?.reset();
     _hideAnimationController?.reset();
-    //start animation
     if (_hideAnimationController != null) {
       _hideAnim = Tween<double>(begin: _formerHeight, end: newer).animate(
         CurvedAnimation(
@@ -484,56 +583,17 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     }
   }
 
+  /// 系统窗口 metrics 变化时更新底部 inset（主要用于 mediaQuery 模式）。
   @override
   void didChangeMetrics() {
-    if (!mounted) {
+    if (!mounted || widget.animationMode != KeyboardAnimationMode.mediaQuery) {
       return;
     }
 
-    ///这里是在build之外收到变化
+    // 在 build 之外收到 metrics 变化，需通过 View 读取 viewInsets。
     final view = View.of(context);
     final inset = view.viewInsets.bottom / view.devicePixelRatio;
-
-    switch (_mediaAnimType) {
-      case KeyboardAnimationType.show:
-        if (_bottomPadding != inset) {
-          _bottomPadding = inset;
-          widget.showAnimationListener?.call(_bottomPadding, false);
-          _startMediaAnimFinishTimer();
-          final end = _mediaAnimEndValue;
-          if (end != null && (_bottomPadding - end).abs() < 1) {
-            _cancelMediaAnimFinishTimer();
-            _mediaAnimType = null;
-            _mediaAnimEndValue = null;
-            widget.showAnimationListener?.call(_bottomPadding, true);
-          }
-        }
-        break;
-      case KeyboardAnimationType.hide:
-        if (_bottomPadding != inset) {
-          _bottomPadding = inset;
-          widget.hideAnimationListener?.call(_bottomPadding, false);
-          _startMediaAnimFinishTimer();
-          final end = _mediaAnimEndValue;
-          if (end != null && (_bottomPadding - end).abs() < 1) {
-            _cancelMediaAnimFinishTimer();
-            _mediaAnimType = null;
-            _mediaAnimEndValue = null;
-            widget.hideAnimationListener?.call(_bottomPadding, true);
-          }
-        }
-        break;
-      default:
-        if (_bottomPadding != inset) {
-          _pendingBottomPadding = inset;
-          _pendingMetricsTimer?.cancel();
-          _pendingMetricsTimer = Timer(const Duration(milliseconds: 500), () {
-            _pendingBottomPadding = null;
-            _pendingMetricsTimer = null;
-          });
-        }
-        break;
-    }
+    _applyMediaQueryInset(inset);
   }
 
   @override

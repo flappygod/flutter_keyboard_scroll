@@ -1,3 +1,3 @@
-## 1.0.25
+## 1.0.26
 
-* Fixed a bug that didChangeMetrics coming before _showListener.
+* Improved KeyboardObserver by fixing the race between didChangeMetrics and native keyboard events, adding debounce-based completion and pending-state fallbacks for mediaQuery mode, relaxing end-value tolerance, and refining mode-switch/update handling for better Android compatibility.
