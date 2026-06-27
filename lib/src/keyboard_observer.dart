@@ -3,6 +3,8 @@
 /// 在 Android/iOS 上通过 [EventChannel] 接收原生键盘高度变化；Web 上部分能力不可用。
 library keyboard_observer;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,6 +38,9 @@ class KeyboardObserveListenManager {
   /// 键盘隐藏（type == 3）回调集合。
   static final Set<KeyboardObserverListener> _hideListeners = {};
 
+  /// EventChannel 订阅。
+  static StreamSubscription? _subscription;
+
   /// 注册键盘即将显示阶段的监听（原生 type == 2 时回调）。
   static void addKeyboardShowListener(KeyboardObserverListener listener) {
     _showListeners.add(listener);
@@ -51,11 +56,13 @@ class KeyboardObserveListenManager {
   /// 移除由 [addKeyboardShowListener] 注册的监听。
   static void removeKeyboardShowListener(KeyboardObserverListener listener) {
     _showListeners.remove(listener);
+    _checkDispose();
   }
 
   /// 移除由 [addKeyboardHideListener] 注册的监听。
   static void removeKeyboardHideListener(KeyboardObserverListener listener) {
     _hideListeners.remove(listener);
+    _checkDispose();
   }
 
   /// 在首次注册监听时订阅原生广播，并按 type 分发给对应集合。
@@ -64,13 +71,12 @@ class KeyboardObserveListenManager {
       return;
     }
     _listenState = true;
-    _eventChannel
+    _subscription = _eventChannel
         .receiveBroadcastStream()
         .map((result) => result as Map)
         .listen((data) {
-      // type == 2：软键盘弹出
       if (data["type"] == 2) {
-        for (KeyboardObserverListener listener in _showListeners) {
+        for (final listener in _showListeners.toList()) {
           listener(
             double.parse(data["former"].toString()),
             double.parse(data["newer"].toString()),
@@ -78,9 +84,9 @@ class KeyboardObserveListenManager {
           );
         }
       }
-      // type == 3：软键盘收起
+
       if (data["type"] == 3) {
-        for (KeyboardObserverListener listener in _hideListeners) {
+        for (final listener in _hideListeners.toList()) {
           listener(
             double.parse(data["former"].toString()),
             double.parse(data["newer"].toString()),
@@ -89,6 +95,17 @@ class KeyboardObserveListenManager {
         }
       }
     });
+  }
+
+  /// 当没有任何监听时，注销 EventChannel。
+  static Future<void> _checkDispose() async {
+    if (_showListeners.isNotEmpty || _hideListeners.isNotEmpty) {
+      return;
+    }
+    final subscription = _subscription;
+    _subscription = null;
+    _listenState = false;
+    await subscription?.cancel();
   }
 }
 
@@ -182,6 +199,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   /// 当前收起方向的高度 Tween。
   Animation<double>? _hideAnim;
 
+  CurvedAnimation? _showCurve;
+  CurvedAnimation? _hideCurve;
+
   /// [KeyboardAnimationMode.mediaQuery] 下最近一次有效的底部 inset（逻辑像素）。
   double _bottomPadding = 0;
 
@@ -212,11 +232,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   void _updateSimulatedDurations() {
     _showAnimationController?.duration = widget.durationShow;
     _hideAnimationController?.duration = widget.durationHide;
-  }
-
-  /// 在 [didChangeMetrics] 中应用新的底部 inset，驱动逐帧回调或暂存 pending。
-  void _applyMediaQueryInset(double inset) {
-    _bottomPadding = inset;
   }
 
   /// 按 [widget.animationMode] 注册原生监听并初始化对应模式的内部状态。
@@ -261,12 +276,15 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     ///show动画监听
     _showAnimListener ??= () {
       switch (widget.animationMode) {
+        ///模拟模式
         case KeyboardAnimationMode.simulated:
           if (_formerHeight != _showAnim!.value) {
             _formerHeight = _showAnim!.value;
             widget.showAnimationListener?.call(_formerHeight, false);
           }
           break;
+
+        ///mediaQuery模式
         case KeyboardAnimationMode.mediaQuery:
           if (_formerHeight != _bottomPadding) {
             _formerHeight = _bottomPadding;
@@ -279,12 +297,15 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     ///hide动画监听
     _hideAnimListener ??= () {
       switch (widget.animationMode) {
+        ///模拟模式
         case KeyboardAnimationMode.simulated:
           if (_formerHeight != _hideAnim!.value) {
             _formerHeight = _hideAnim!.value;
             widget.hideAnimationListener?.call(_formerHeight, false);
           }
           break;
+
+        ///mediaQuery模式
         case KeyboardAnimationMode.mediaQuery:
           if (_formerHeight != _bottomPadding) {
             _formerHeight = _bottomPadding;
@@ -323,10 +344,14 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (_hideListener != null) {
       KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
     }
+    _showCurve?.dispose();
+    _hideCurve?.dispose();
     _showAnimationController?.dispose();
     _hideAnimationController?.dispose();
     _showAnimationController = null;
     _hideAnimationController = null;
+    _showCurve = null;
+    _hideCurve = null;
   }
 
   @override
@@ -340,27 +365,33 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   ///
   /// [former] 来自原生事件，当前实现以 [_formerHeight] 为 Tween 起点以衔接上一段动画。
   void _showAnimation(double former, double newer) {
-    if (_hideAnimListener != null) {
-      _hideAnim?.removeListener(_hideAnimListener!);
+    VoidCallback? hideListener = _hideAnimListener;
+    if (hideListener != null) {
+      _hideAnim?.removeListener(hideListener);
     }
-    if (_showAnimListener != null) {
-      _showAnim?.removeListener(_showAnimListener!);
+    VoidCallback? showListener = _showAnimListener;
+    if (showListener != null) {
+      _showAnim?.removeListener(showListener);
     }
     // 打断可能仍在进行的反向动画
     _hideAnimationController?.stop();
     _showAnimationController?.stop();
     _hideAnimationController?.reset();
     _showAnimationController?.reset();
+    // 控制器不为空创建新的animation
     if (_showAnimationController != null) {
-      _showAnim = Tween<double>(begin: _formerHeight, end: newer).animate(
-        CurvedAnimation(
-          parent: _showAnimationController!,
-          curve: widget.curveShow ?? const Cubic(0.34, 0.84, 0.12, 1.00),
-        ),
+      _showCurve?.dispose();
+      _showCurve = CurvedAnimation(
+        parent: _showAnimationController!,
+        curve: widget.curveShow ?? const Cubic(0.34, 0.84, 0.12, 1.00),
       );
+      _showAnim =
+          Tween<double>(begin: _formerHeight, end: newer).animate(_showCurve!);
       _showAnim?.addListener(_showAnimListener!);
       _showAnimationController?.forward().then((_) {
-        widget.showAnimationListener?.call(_showAnim?.value ?? 0, true);
+        if (mounted) {
+          widget.showAnimationListener?.call(_showAnim?.value ?? 0, true);
+        }
       });
     }
   }
@@ -369,27 +400,33 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   ///
   /// [former] 来自原生事件，当前实现以 [_formerHeight] 为 Tween 起点以衔接上一段动画。
   void _hideAnimation(double former, double newer) {
-    if (_hideAnimListener != null) {
-      _hideAnim?.removeListener(_hideAnimListener!);
+    VoidCallback? hideListener = _hideAnimListener;
+    if (hideListener != null) {
+      _hideAnim?.removeListener(hideListener);
     }
-    if (_showAnimListener != null) {
-      _showAnim?.removeListener(_showAnimListener!);
+    VoidCallback? showListener = _showAnimListener;
+    if (showListener != null) {
+      _showAnim?.removeListener(showListener);
     }
     // 打断可能仍在进行的反向动画
     _hideAnimationController?.stop();
     _showAnimationController?.stop();
     _showAnimationController?.reset();
     _hideAnimationController?.reset();
+    // 控制器不为空创建新的animation
     if (_hideAnimationController != null) {
-      _hideAnim = Tween<double>(begin: _formerHeight, end: newer).animate(
-        CurvedAnimation(
-          parent: _hideAnimationController!,
-          curve: widget.curveHide ?? const Cubic(0.34, 0.84, 0.12, 1.00),
-        ),
+      _hideCurve?.dispose();
+      _hideCurve = CurvedAnimation(
+        parent: _hideAnimationController!,
+        curve: widget.curveHide ?? const Cubic(0.34, 0.84, 0.12, 1.00),
       );
+      _hideAnim =
+          Tween<double>(begin: _formerHeight, end: newer).animate(_hideCurve!);
       _hideAnim?.addListener(_hideAnimListener!);
       _hideAnimationController?.forward().then((_) {
-        widget.hideAnimationListener?.call(_hideAnim?.value ?? 0, true);
+        if (mounted) {
+          widget.hideAnimationListener?.call(_hideAnim?.value ?? 0, true);
+        }
       });
     }
   }
@@ -400,10 +437,10 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (!mounted) {
       return;
     }
-    //在 build 之外收到 metrics 变化，需通过 View 读取 viewInsets。
+    //所有的change状态下，我们都将_bottomPadding先缓存起来
     final view = View.of(context);
     final inset = view.viewInsets.bottom / view.devicePixelRatio;
-    _applyMediaQueryInset(inset);
+    _bottomPadding = inset;
   }
 
   @override
