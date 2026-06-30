@@ -111,7 +111,10 @@ class KeyboardObserveListenManager {
 
 /// 键盘显示或隐藏时触发，参数为上一帧高度 [former]、当前目标高度 [newer] 与动画时长 [time]（毫秒）。
 typedef KeyboardObserverListener = Function(
-    double former, double newer, int time);
+  double former,
+  double newer,
+  int time,
+);
 
 /// 键盘动画过程中底部 inset 回调：[bottomInsets] 为当前值，[end] 为 true 表示本段动画结束。
 typedef KeyboardAnimationListener = Function(double bottomInsets, bool end);
@@ -211,6 +214,12 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   /// mediaQuery 模式下当前动画目标值。
   double? _metricsTargetHeight;
 
+  /// mediaQuery 动画序列号。每开启一段新的 mediaQuery 动画就递增。
+  int _metricsSequence = 0;
+
+  /// 当前仍然有效的 mediaQuery 动画序列号。
+  int? _activeMetricsSequence;
+
   @override
   void initState() {
     super.initState();
@@ -226,7 +235,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       return;
     }
 
-    ///同步 AnimationController 时长。
+    /// 同步 AnimationController 时长。
     if (widget.durationShow != oldWidget.durationShow ||
         widget.durationHide != oldWidget.durationHide) {
       _updateSimulatedDurations();
@@ -246,7 +255,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       return;
     }
 
-    ///先移除之前的
+    /// 先移除之前的
     if (_showListener != null) {
       KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
     }
@@ -256,8 +265,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
     _metricsDrivingType = null;
     _metricsTargetHeight = null;
+    _activeMetricsSequence = null;
 
-    ///创建新的
+    /// 创建新的
     _showListener = (double former, double newer, int time) {
       widget.showListener?.call(former, newer, time);
       if (widget.showAnimationListener == null) {
@@ -275,16 +285,16 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
     KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
 
-    ///未配置动画监听时，仅需原生 show/hide 回调，无需创建 AnimationController。
+    /// 未配置动画监听时，仅需原生 show/hide 回调，无需创建 AnimationController。
     if (widget.showAnimationListener == null &&
         widget.hideAnimationListener == null) {
       return;
     }
 
-    ///show动画监听
+    /// show动画监听
     _showAnimListener ??= () {
       switch (widget.animationMode) {
-        ///模拟模式
+        /// 模拟模式
         case KeyboardAnimationMode.simulated:
           if (_formerHeight != _showAnim!.value) {
             _formerHeight = _showAnim!.value;
@@ -292,16 +302,16 @@ class _KeyboardObserverState extends State<KeyboardObserver>
           }
           break;
 
-        ///mediaQuery模式：由 didChangeMetrics 驱动，这里不处理
+        /// mediaQuery模式：由 didChangeMetrics 驱动，这里不处理
         case KeyboardAnimationMode.mediaQuery:
           break;
       }
     };
 
-    ///hide动画监听
+    /// hide动画监听
     _hideAnimListener ??= () {
       switch (widget.animationMode) {
-        ///模拟模式
+        /// 模拟模式
         case KeyboardAnimationMode.simulated:
           if (_formerHeight != _hideAnim!.value) {
             _formerHeight = _hideAnim!.value;
@@ -309,13 +319,13 @@ class _KeyboardObserverState extends State<KeyboardObserver>
           }
           break;
 
-        ///mediaQuery模式：由 didChangeMetrics 驱动，这里不处理
+        /// mediaQuery模式：由 didChangeMetrics 驱动，这里不处理
         case KeyboardAnimationMode.mediaQuery:
           break;
       }
     };
 
-    ///show控制器更新创建
+    /// show控制器更新创建
     if (_showAnimationController != null) {
       _showAnimationController?.duration = widget.durationShow;
     } else {
@@ -325,7 +335,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       );
     }
 
-    ///hide控制器更新创建
+    /// hide控制器更新创建
     if (_hideAnimationController != null) {
       _hideAnimationController!.duration = widget.durationHide;
     } else {
@@ -336,7 +346,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     }
   }
 
-  /// 注销原生监听、取消 debounce、释放 [AnimationController]。
+  /// 注销原生监听、释放 [AnimationController]。
   void _disposeListeners() {
     if (_showListener != null) {
       KeyboardObserveListenManager.removeKeyboardShowListener(_showListener!);
@@ -346,6 +356,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     }
     _metricsDrivingType = null;
     _metricsTargetHeight = null;
+    _activeMetricsSequence = null;
     _showCurve?.dispose();
     _hideCurve?.dispose();
     _showAnimationController?.dispose();
@@ -361,6 +372,31 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     WidgetsBinding.instance.removeObserver(this);
     _disposeListeners();
     super.dispose();
+  }
+
+  /// 开启一段新的 mediaQuery 动画序列，并返回其 token。
+  int _beginMetricsSequence(
+    KeyboardAnimationType type,
+    double newer,
+  ) {
+    _metricsSequence += 1;
+    final int token = _metricsSequence;
+    _activeMetricsSequence = token;
+    _metricsDrivingType = type;
+    _metricsTargetHeight = newer;
+    return token;
+  }
+
+  /// 结束当前 mediaQuery 动画序列，仅当 token 仍然有效时才执行。
+  void _finishMetricsSequenceIfMatch(int token) {
+    if (_activeMetricsSequence != token) {
+      return;
+    }
+    _activeMetricsSequence = null;
+    _metricsDrivingType = null;
+    _metricsTargetHeight = null;
+    _showAnimationController?.stop();
+    _hideAnimationController?.stop();
   }
 
   /// 从 [_formerHeight] 插值到 [newer]，驱动键盘展开动画。
@@ -383,15 +419,20 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _showAnimationController?.reset();
 
     if (widget.animationMode == KeyboardAnimationMode.mediaQuery) {
-      _metricsDrivingType = KeyboardAnimationType.show;
-      _metricsTargetHeight = newer;
+      final int token = _beginMetricsSequence(
+        KeyboardAnimationType.show,
+        newer,
+      );
+
       _formerHeight = _bottomPadding;
       widget.showAnimationListener?.call(_formerHeight, false);
 
+      // 如果当前已经等于目标值，直接完成，并保证最终值就是 newer。
       if (_bottomPadding == newer) {
-        _metricsDrivingType = null;
-        _metricsTargetHeight = null;
-        widget.showAnimationListener?.call(_bottomPadding, true);
+        _formerHeight = newer;
+        _bottomPadding = newer;
+        widget.showAnimationListener?.call(newer, true);
+        _finishMetricsSequenceIfMatch(token);
         return;
       }
 
@@ -402,22 +443,29 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         if (widget.animationMode != KeyboardAnimationMode.mediaQuery) {
           return;
         }
+        if (_activeMetricsSequence != token) {
+          return;
+        }
         if (_metricsDrivingType != KeyboardAnimationType.show) {
           return;
         }
         if (_metricsTargetHeight != newer) {
           return;
         }
-        _formerHeight = _bottomPadding;
-        widget.showAnimationListener?.call(_formerHeight, false);
-        widget.showAnimationListener?.call(_formerHeight, true);
-        _metricsDrivingType = null;
-        _metricsTargetHeight = null;
+
+        // 兜底保证：控制器完成时，最终一定以 newer 收尾。
+        if (_formerHeight != newer) {
+          _formerHeight = newer;
+          _bottomPadding = newer;
+          widget.showAnimationListener?.call(newer, false);
+        }
+        widget.showAnimationListener?.call(newer, true);
+        _finishMetricsSequenceIfMatch(token);
       });
       return;
     }
 
-    // 控制器不为空创建新的animation
+    // simulated 模式
     if (_showAnimationController != null) {
       _showCurve?.dispose();
       _showCurve = CurvedAnimation(
@@ -429,7 +477,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       _showAnim?.addListener(_showAnimListener!);
       _showAnimationController?.forward().then((_) {
         if (mounted) {
-          widget.showAnimationListener?.call(_showAnim?.value ?? 0, true);
+          widget.showAnimationListener?.call(_showAnim?.value ?? newer, true);
         }
       });
     }
@@ -455,15 +503,20 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _hideAnimationController?.reset();
 
     if (widget.animationMode == KeyboardAnimationMode.mediaQuery) {
-      _metricsDrivingType = KeyboardAnimationType.hide;
-      _metricsTargetHeight = newer;
+      final int token = _beginMetricsSequence(
+        KeyboardAnimationType.hide,
+        newer,
+      );
+
       _formerHeight = _bottomPadding;
       widget.hideAnimationListener?.call(_formerHeight, false);
 
+      // 如果当前已经等于目标值，直接完成，并保证最终值就是 newer。
       if (_bottomPadding == newer) {
-        _metricsDrivingType = null;
-        _metricsTargetHeight = null;
-        widget.hideAnimationListener?.call(_bottomPadding, true);
+        _formerHeight = newer;
+        _bottomPadding = newer;
+        widget.hideAnimationListener?.call(newer, true);
+        _finishMetricsSequenceIfMatch(token);
         return;
       }
 
@@ -474,22 +527,29 @@ class _KeyboardObserverState extends State<KeyboardObserver>
         if (widget.animationMode != KeyboardAnimationMode.mediaQuery) {
           return;
         }
+        if (_activeMetricsSequence != token) {
+          return;
+        }
         if (_metricsDrivingType != KeyboardAnimationType.hide) {
           return;
         }
         if (_metricsTargetHeight != newer) {
           return;
         }
-        _formerHeight = _bottomPadding;
-        widget.hideAnimationListener?.call(_formerHeight, false);
-        widget.hideAnimationListener?.call(_formerHeight, true);
-        _metricsDrivingType = null;
-        _metricsTargetHeight = null;
+
+        // 兜底保证：控制器完成时，最终一定以 newer 收尾。
+        if (_formerHeight != newer) {
+          _formerHeight = newer;
+          _bottomPadding = newer;
+          widget.hideAnimationListener?.call(newer, false);
+        }
+        widget.hideAnimationListener?.call(newer, true);
+        _finishMetricsSequenceIfMatch(token);
       });
       return;
     }
 
-    // 控制器不为空创建新的animation
+    // simulated 模式
     if (_hideAnimationController != null) {
       _hideCurve?.dispose();
       _hideCurve = CurvedAnimation(
@@ -501,7 +561,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       _hideAnim?.addListener(_hideAnimListener!);
       _hideAnimationController?.forward().then((_) {
         if (mounted) {
-          widget.hideAnimationListener?.call(_hideAnim?.value ?? 0, true);
+          widget.hideAnimationListener?.call(_hideAnim?.value ?? newer, true);
         }
       });
     }
@@ -513,7 +573,8 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (!mounted) {
       return;
     }
-    //所有的change状态下，我们都将_bottomPadding先缓存起来
+
+    // 所有 change 状态下，都先缓存最新 bottom inset
     final view = View.of(context);
     final inset = view.viewInsets.bottom / view.devicePixelRatio;
     _bottomPadding = inset;
@@ -524,7 +585,9 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
     final drivingType = _metricsDrivingType;
     final targetHeight = _metricsTargetHeight;
-    if (drivingType == null || targetHeight == null) {
+    final activeToken = _activeMetricsSequence;
+
+    if (drivingType == null || targetHeight == null || activeToken == null) {
       return;
     }
 
@@ -543,16 +606,17 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (_bottomPadding == targetHeight) {
       switch (drivingType) {
         case KeyboardAnimationType.show:
-          widget.showAnimationListener?.call(_bottomPadding, true);
+          _formerHeight = targetHeight;
+          _bottomPadding = targetHeight;
+          widget.showAnimationListener?.call(targetHeight, true);
           break;
         case KeyboardAnimationType.hide:
-          widget.hideAnimationListener?.call(_bottomPadding, true);
+          _formerHeight = targetHeight;
+          _bottomPadding = targetHeight;
+          widget.hideAnimationListener?.call(targetHeight, true);
           break;
       }
-      _metricsDrivingType = null;
-      _metricsTargetHeight = null;
-      _showAnimationController?.stop();
-      _hideAnimationController?.stop();
+      _finishMetricsSequenceIfMatch(activeToken);
     }
   }
 
