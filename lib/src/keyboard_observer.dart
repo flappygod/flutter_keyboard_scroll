@@ -220,6 +220,12 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   /// 当前仍然有效的 mediaQuery 动画序列号。
   int? _activeMetricsSequence;
 
+  /// simulated 动画序列号。每开启一段新的 simulated 动画就递增。
+  int _simulatedSequence = 0;
+
+  /// 当前仍然有效的 simulated 动画序列号。
+  int? _activeSimulatedSequence;
+
   @override
   void initState() {
     super.initState();
@@ -266,6 +272,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _metricsDrivingType = null;
     _metricsTargetHeight = null;
     _activeMetricsSequence = null;
+    _activeSimulatedSequence = null;
 
     /// 创建新的
     _showListener = (double former, double newer, int time) {
@@ -357,6 +364,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _metricsDrivingType = null;
     _metricsTargetHeight = null;
     _activeMetricsSequence = null;
+    _activeSimulatedSequence = null;
     _showCurve?.dispose();
     _hideCurve?.dispose();
     _showAnimationController?.dispose();
@@ -399,6 +407,19 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _hideAnimationController?.stop();
   }
 
+  /// 开启一段新的 simulated 动画序列，并返回其 token。
+  int _beginSimulatedSequence() {
+    _simulatedSequence += 1;
+    final int token = _simulatedSequence;
+    _activeSimulatedSequence = token;
+    return token;
+  }
+
+  /// 判断两个高度是否足够接近，避免浮点误差导致无法收尾。
+  bool _isCloseTo(double a, double b, [double epsilon = 0.5]) {
+    return (a - b).abs() <= epsilon;
+  }
+
   /// 从 [_formerHeight] 插值到 [newer]，驱动键盘展开动画。
   ///
   /// [former] 来自原生事件，当前实现以 [_formerHeight] 为 Tween 起点以衔接上一段动画。
@@ -428,7 +449,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       widget.showAnimationListener?.call(_formerHeight, false);
 
       // 如果当前已经等于目标值，直接完成，并保证最终值就是 newer。
-      if (_bottomPadding == newer) {
+      if (_isCloseTo(_bottomPadding, newer)) {
         _formerHeight = newer;
         _bottomPadding = newer;
         widget.showAnimationListener?.call(newer, true);
@@ -465,7 +486,8 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       return;
     }
 
-    // simulated 模式
+    final int token = _beginSimulatedSequence();
+
     if (_showAnimationController != null) {
       _showCurve?.dispose();
       _showCurve = CurvedAnimation(
@@ -476,9 +498,17 @@ class _KeyboardObserverState extends State<KeyboardObserver>
           Tween<double>(begin: _formerHeight, end: newer).animate(_showCurve!);
       _showAnim?.addListener(_showAnimListener!);
       _showAnimationController?.forward().then((_) {
-        if (mounted) {
-          widget.showAnimationListener?.call(_showAnim?.value ?? newer, true);
+        if (!mounted) {
+          return;
         }
+        if (widget.animationMode != KeyboardAnimationMode.simulated) {
+          return;
+        }
+        if (_activeSimulatedSequence != token) {
+          return;
+        }
+        _formerHeight = newer;
+        widget.showAnimationListener?.call(newer, true);
       });
     }
   }
@@ -512,7 +542,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       widget.hideAnimationListener?.call(_formerHeight, false);
 
       // 如果当前已经等于目标值，直接完成，并保证最终值就是 newer。
-      if (_bottomPadding == newer) {
+      if (_isCloseTo(_bottomPadding, newer)) {
         _formerHeight = newer;
         _bottomPadding = newer;
         widget.hideAnimationListener?.call(newer, true);
@@ -549,7 +579,8 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       return;
     }
 
-    // simulated 模式
+    final int token = _beginSimulatedSequence();
+
     if (_hideAnimationController != null) {
       _hideCurve?.dispose();
       _hideCurve = CurvedAnimation(
@@ -560,9 +591,17 @@ class _KeyboardObserverState extends State<KeyboardObserver>
           Tween<double>(begin: _formerHeight, end: newer).animate(_hideCurve!);
       _hideAnim?.addListener(_hideAnimListener!);
       _hideAnimationController?.forward().then((_) {
-        if (mounted) {
-          widget.hideAnimationListener?.call(_hideAnim?.value ?? newer, true);
+        if (!mounted) {
+          return;
         }
+        if (widget.animationMode != KeyboardAnimationMode.simulated) {
+          return;
+        }
+        if (_activeSimulatedSequence != token) {
+          return;
+        }
+        _formerHeight = newer;
+        widget.hideAnimationListener?.call(newer, true);
       });
     }
   }
@@ -603,7 +642,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       }
     }
 
-    if (_bottomPadding == targetHeight) {
+    if (_isCloseTo(_bottomPadding, targetHeight)) {
       switch (drivingType) {
         case KeyboardAnimationType.show:
           _formerHeight = targetHeight;
