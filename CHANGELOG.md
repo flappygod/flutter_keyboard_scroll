@@ -1,3 +1,3 @@
-## 1.0.28
+## 1.0.29
 
 * Change the implementation of KeyboardAnimationMode.mediaQuery.
