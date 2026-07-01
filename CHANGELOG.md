@@ -1,3 +1,3 @@
-## 1.0.31
+## 1.0.32
 
-* Change the implementation of KeyboardObserveListenManager.
+* Fix bugs for some android mobile.

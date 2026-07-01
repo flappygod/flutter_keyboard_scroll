@@ -1,9 +1,6 @@
 /// 软键盘事件与 [KeyboardObserver] 动画相关的类型与工具。
 ///
 /// 在 Android/iOS 上通过 [EventChannel] 接收原生键盘高度变化；Web 上部分能力不可用。
-/// 软键盘事件与 [KeyboardObserver] 动画相关的类型与工具。
-///
-/// 在 Android/iOS 上通过 [EventChannel] 接收原生键盘高度变化；Web 上部分能力不可用。
 library keyboard_observer;
 
 import 'dart:async';
@@ -359,7 +356,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   /// 若在一段时间内不再变化，则认为本段键盘动画结束。
   void _restartAndroidMetricsSettleTimer(int token) {
     _cancelAndroidMetricsSettleTimer();
-
     _androidMetricsSettleTimer = Timer(_androidMetricsSettleDuration, () {
       if (!mounted) {
         return;
@@ -370,15 +366,12 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       if (_activeMetricsSequence != token) {
         return;
       }
-
       final drivingType = _metricsDrivingType;
       if (drivingType == null) {
         return;
       }
-
       final double finalHeight = _bottomPadding;
       _formerHeight = finalHeight;
-
       switch (drivingType) {
         case KeyboardAnimationType.show:
           widget.showAnimationListener?.call(finalHeight, true);
@@ -387,7 +380,6 @@ class _KeyboardObserverState extends State<KeyboardObserver>
           widget.hideAnimationListener?.call(finalHeight, true);
           break;
       }
-
       _finishMetricsSequenceIfMatch(token);
     });
   }
@@ -419,14 +411,14 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       if (widget.showAnimationListener == null) {
         return;
       }
-      _showAnimation(former, newer);
+      _showAnimation(newer);
     };
     _hideListener = (double former, double newer, int time) {
       widget.hideListener?.call(former, newer, time);
       if (widget.hideAnimationListener == null) {
         return;
       }
-      _hideAnimation(former, newer);
+      _hideAnimation(newer);
     };
     KeyboardObserveListenManager.addKeyboardShowListener(_showListener!);
     KeyboardObserveListenManager.addKeyboardHideListener(_hideListener!);
@@ -564,8 +556,8 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
   /// 从 [_formerHeight] 插值到 [newer]，驱动键盘展开动画。
   ///
-  /// [former] 来自原生事件，当前实现以 [_formerHeight] 为 Tween 起点以衔接上一段动画。
-  void _showAnimation(double former, double newer) {
+  /// 当前实现以 [_formerHeight] / 当前 [_bottomPadding] 为衔接起点。
+  void _showAnimation(double newer) {
     VoidCallback? hideListener = _hideAnimListener;
     if (hideListener != null) {
       _hideAnim?.removeListener(hideListener);
@@ -589,6 +581,11 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
       _formerHeight = _bottomPadding;
       widget.showAnimationListener?.call(_formerHeight, false);
+
+      // Android存在很多特殊情况.
+      if (_isAndroid) {
+        _restartAndroidMetricsSettleTimer(token);
+      }
 
       // iOS/其他平台：如果当前已经等于目标值，直接完成。
       // Android：不信任原生目标值，交给 didChangeMetrics + settle timer 收尾。
@@ -631,8 +628,8 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
   /// 从 [_formerHeight] 插值到 [newer]，驱动键盘收起动画。
   ///
-  /// [former] 来自原生事件，当前实现以 [_formerHeight] 为 Tween 起点以衔接上一段动画。
-  void _hideAnimation(double former, double newer) {
+  /// 当前实现以 [_formerHeight] / 当前 [_bottomPadding] 为衔接起点。
+  void _hideAnimation(double newer) {
     VoidCallback? hideListener = _hideAnimListener;
     if (hideListener != null) {
       _hideAnim?.removeListener(hideListener);
@@ -656,6 +653,10 @@ class _KeyboardObserverState extends State<KeyboardObserver>
 
       _formerHeight = _bottomPadding;
       widget.hideAnimationListener?.call(_formerHeight, false);
+
+      if (_isAndroid) {
+        _restartAndroidMetricsSettleTimer(token);
+      }
 
       // iOS/其他平台：如果当前已经等于目标值，直接完成。
       // Android：不信任原生目标值，交给 didChangeMetrics + settle timer 收尾。
