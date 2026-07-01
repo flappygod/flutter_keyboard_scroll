@@ -19,9 +19,24 @@ enum KeyboardAnimationType {
   hide,
 }
 
-/// 注册/注销原生键盘显示与隐藏监听，并向 Dart 侧广播事件。
+/// 键盘事件监听回调。
 ///
-/// 仅使用静态方法；不要尝试实例化本类。
+/// 参数依次为：
+/// - former: 变化前高度
+/// - newer: 变化后高度
+/// - time: 动画时长/时间（由原生侧定义）
+typedef KeyboardObserverListener = void Function(
+  double former,
+  double newer,
+  int time,
+);
+
+/// 注册原生键盘显示与隐藏监听，并向 Dart 侧广播事件。
+///
+/// 设计说明：
+/// - 全程常驻订阅 EventChannel，只初始化一次，不主动取消；
+/// - 避免频繁 add/remove listener 时，因订阅切换产生事件丢失；
+/// - 仅使用静态方法；不要尝试实例化本类。
 class KeyboardObserveListenManager {
   KeyboardObserveListenManager._();
 
@@ -29,92 +44,146 @@ class KeyboardObserveListenManager {
   static const EventChannel _eventChannel =
       EventChannel('keyboard_observer_event');
 
-  /// 是否已订阅 [_eventChannel]；全局只建立一次订阅。
-  static bool _listenState = false;
-
   /// 键盘显示（type == 2）回调集合。
-  static final Set<KeyboardObserverListener> _showListeners = {};
+  static final Set<KeyboardObserverListener> _showListeners =
+      <KeyboardObserverListener>{};
 
   /// 键盘隐藏（type == 3）回调集合。
-  static final Set<KeyboardObserverListener> _hideListeners = {};
+  static final Set<KeyboardObserverListener> _hideListeners =
+      <KeyboardObserverListener>{};
 
   /// EventChannel 订阅。
-  static StreamSubscription? _subscription;
+  static StreamSubscription<dynamic>? _subscription;
+
+  /// 是否已经完成初始化。
+  static bool _initialized = false;
 
   /// 注册键盘即将显示阶段的监听（原生 type == 2 时回调）。
   static void addKeyboardShowListener(KeyboardObserverListener listener) {
+    _ensureInitialized();
     _showListeners.add(listener);
-    _checkListeners();
   }
 
   /// 注册键盘即将隐藏阶段的监听（原生 type == 3 时回调）。
   static void addKeyboardHideListener(KeyboardObserverListener listener) {
+    _ensureInitialized();
     _hideListeners.add(listener);
-    _checkListeners();
   }
 
   /// 移除由 [addKeyboardShowListener] 注册的监听。
   static void removeKeyboardShowListener(KeyboardObserverListener listener) {
     _showListeners.remove(listener);
-    _checkDispose();
   }
 
   /// 移除由 [addKeyboardHideListener] 注册的监听。
   static void removeKeyboardHideListener(KeyboardObserverListener listener) {
     _hideListeners.remove(listener);
-    _checkDispose();
   }
 
-  /// 在首次注册监听时订阅原生广播，并按 type 分发给对应集合。
-  static void _checkListeners() {
-    if (_listenState) {
-      return;
-    }
-    _listenState = true;
-    _subscription = _eventChannel
-        .receiveBroadcastStream()
-        .map((result) => result as Map)
-        .listen((data) {
-      if (data["type"] == 2) {
-        for (final listener in _showListeners.toList()) {
-          listener(
-            double.parse(data["former"].toString()),
-            double.parse(data["newer"].toString()),
-            int.parse(data["time"].toString()),
-          );
-        }
-      }
-
-      if (data["type"] == 3) {
-        for (final listener in _hideListeners.toList()) {
-          listener(
-            double.parse(data["former"].toString()),
-            double.parse(data["newer"].toString()),
-            int.parse(data["time"].toString()),
-          );
-        }
-      }
-    });
+  /// 可选：移除所有显示监听。
+  static void clearKeyboardShowListeners() {
+    _showListeners.clear();
   }
 
-  /// 当没有任何监听时，注销 EventChannel。
-  static Future<void> _checkDispose() async {
-    if (_showListeners.isNotEmpty || _hideListeners.isNotEmpty) {
+  /// 可选：移除所有隐藏监听。
+  static void clearKeyboardHideListeners() {
+    _hideListeners.clear();
+  }
+
+  /// 可选：移除所有监听。
+  static void clearAllListeners() {
+    _showListeners.clear();
+    _hideListeners.clear();
+  }
+
+  /// 确保 EventChannel 只初始化订阅一次。
+  static void _ensureInitialized() {
+    if (_initialized) return;
+    _initialized = true;
+    _subscription = _eventChannel.receiveBroadcastStream().listen(
+          _handleEvent,
+          onError: _handleError,
+          onDone: _handleDone,
+          cancelOnError: false,
+        );
+  }
+
+  /// 处理原生事件分发。
+  static void _handleEvent(dynamic result) {
+    if (result is! Map) {
       return;
     }
+    final dynamic typeValue = result['type'];
+    final int? type = _toInt(typeValue);
+    if (type == null) {
+      return;
+    }
+    final double former = _toDouble(result['former']) ?? 0.0;
+    final double newer = _toDouble(result['newer']) ?? 0.0;
+    final int time = _toInt(result['time']) ?? 0;
+    if (type == 2) {
+      for (final listener in _showListeners.toList()) {
+        listener(former, newer, time);
+      }
+      return;
+    }
+    if (type == 3) {
+      for (final listener in _hideListeners.toList()) {
+        listener(former, newer, time);
+      }
+    }
+  }
+
+  /// 处理订阅错误。
+  ///
+  /// 常驻模式下，如果底层流异常结束，尝试自动重建订阅。
+  static void _handleError(Object error, [StackTrace? stackTrace]) {
+    _subscription = null;
+    _initialized = false;
+    _ensureInitialized();
+  }
+
+  /// 处理订阅结束。
+  ///
+  /// 常驻模式下，如果底层流结束，尝试自动重建订阅。
+  static void _handleDone() {
+    _subscription = null;
+    _initialized = false;
+    _ensureInitialized();
+  }
+
+  /// 将动态值安全转换为 int。
+  static int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  /// 将动态值安全转换为 double。
+  static double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  /// 可选：手动初始化。
+  ///
+  /// 如果你希望在应用启动时就建立订阅，可以主动调用一次。
+  static void initialize() {
+    _ensureInitialized();
+  }
+
+  /// 可选：仅用于测试或应用彻底销毁时手动释放。
+  ///
+  /// 正常业务场景下，常驻模式通常不需要调用。
+  static Future<void> dispose() async {
     final subscription = _subscription;
     _subscription = null;
-    _listenState = false;
+    _initialized = false;
     await subscription?.cancel();
   }
 }
-
-/// 键盘显示或隐藏时触发，参数为上一帧高度 [former]、当前目标高度 [newer] 与动画时长 [time]（毫秒）。
-typedef KeyboardObserverListener = Function(
-  double former,
-  double newer,
-  int time,
-);
 
 /// 键盘动画过程中底部 inset 回调：[bottomInsets] 为当前值，[end] 为 true 表示本段动画结束。
 typedef KeyboardAnimationListener = Function(double bottomInsets, bool end);

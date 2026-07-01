@@ -1,3 +1,3 @@
-## 1.0.30
+## 1.0.31
 
-* Change the implementation of KeyboardAnimationMode.mediaQuery.
+* Change the implementation of KeyboardObserveListenManager.
