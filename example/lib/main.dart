@@ -63,6 +63,10 @@ class _MyAppState extends State<MyApp> {
           child: Container(
             width: double.infinity,
             height: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.red,
+              border: Border.all(color: Colors.blue,width: 1),
+            ),
             alignment: Alignment.bottomCenter,
             child: Container(
               width: MediaQuery.of(context).size.width,
