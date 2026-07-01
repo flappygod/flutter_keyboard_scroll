@@ -1,6 +1,9 @@
 /// 软键盘事件与 [KeyboardObserver] 动画相关的类型与工具。
 ///
 /// 在 Android/iOS 上通过 [EventChannel] 接收原生键盘高度变化；Web 上部分能力不可用。
+/// 软键盘事件与 [KeyboardObserver] 动画相关的类型与工具。
+///
+/// 在 Android/iOS 上通过 [EventChannel] 接收原生键盘高度变化；Web 上部分能力不可用。
 library keyboard_observer;
 
 import 'dart:async';
@@ -295,6 +298,16 @@ class _KeyboardObserverState extends State<KeyboardObserver>
   /// 当前仍然有效的 simulated 动画序列号。
   int? _activeSimulatedSequence;
 
+  /// Android 下 mediaQuery 模式的“稳定检测”定时器。
+  Timer? _androidMetricsSettleTimer;
+
+  /// Android 下判定“已稳定”的静默时长。
+  static const Duration _androidMetricsSettleDuration =
+      Duration(milliseconds: 200);
+
+  bool get _isAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
   @override
   void initState() {
     super.initState();
@@ -323,6 +336,62 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _hideAnimationController?.duration = widget.durationHide;
   }
 
+  /// 根据平台决定动画结束时采用的最终高度。
+  ///
+  /// Android：最终以 Flutter 侧最新的 [_bottomPadding] 为准。
+  /// iOS/其他平台：继续使用原生事件给出的 [newer]。
+  double _resolveFinalHeight(double newer) {
+    if (_isAndroid) {
+      return _bottomPadding;
+    }
+    return newer;
+  }
+
+  /// 取消 Android metrics 稳定检测定时器。
+  void _cancelAndroidMetricsSettleTimer() {
+    _androidMetricsSettleTimer?.cancel();
+    _androidMetricsSettleTimer = null;
+  }
+
+  /// 启动/重启 Android metrics 稳定检测。
+  ///
+  /// 每次 didChangeMetrics 收到新 inset 后重启一次；
+  /// 若在一段时间内不再变化，则认为本段键盘动画结束。
+  void _restartAndroidMetricsSettleTimer(int token) {
+    _cancelAndroidMetricsSettleTimer();
+
+    _androidMetricsSettleTimer = Timer(_androidMetricsSettleDuration, () {
+      if (!mounted) {
+        return;
+      }
+      if (widget.animationMode != KeyboardAnimationMode.mediaQuery) {
+        return;
+      }
+      if (_activeMetricsSequence != token) {
+        return;
+      }
+
+      final drivingType = _metricsDrivingType;
+      if (drivingType == null) {
+        return;
+      }
+
+      final double finalHeight = _bottomPadding;
+      _formerHeight = finalHeight;
+
+      switch (drivingType) {
+        case KeyboardAnimationType.show:
+          widget.showAnimationListener?.call(finalHeight, true);
+          break;
+        case KeyboardAnimationType.hide:
+          widget.hideAnimationListener?.call(finalHeight, true);
+          break;
+      }
+
+      _finishMetricsSequenceIfMatch(token);
+    });
+  }
+
   /// 按 [widget.animationMode] 注册原生监听并初始化对应模式的内部状态。
   void _initListeners() {
     // Web 无原生 EventChannel 实现，直接跳过。
@@ -338,6 +407,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
     }
 
+    _cancelAndroidMetricsSettleTimer();
     _metricsDrivingType = null;
     _metricsTargetHeight = null;
     _activeMetricsSequence = null;
@@ -430,6 +500,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (_hideListener != null) {
       KeyboardObserveListenManager.removeKeyboardHideListener(_hideListener!);
     }
+    _cancelAndroidMetricsSettleTimer();
     _metricsDrivingType = null;
     _metricsTargetHeight = null;
     _activeMetricsSequence = null;
@@ -461,6 +532,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     _activeMetricsSequence = token;
     _metricsDrivingType = type;
     _metricsTargetHeight = newer;
+    _cancelAndroidMetricsSettleTimer();
     return token;
   }
 
@@ -469,6 +541,7 @@ class _KeyboardObserverState extends State<KeyboardObserver>
     if (_activeMetricsSequence != token) {
       return;
     }
+    _cancelAndroidMetricsSettleTimer();
     _activeMetricsSequence = null;
     _metricsDrivingType = null;
     _metricsTargetHeight = null;
@@ -517,41 +590,15 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       _formerHeight = _bottomPadding;
       widget.showAnimationListener?.call(_formerHeight, false);
 
-      // 如果当前已经等于目标值，直接完成，并保证最终值就是 newer。
-      if (_isCloseTo(_bottomPadding, newer)) {
-        _formerHeight = newer;
-        _bottomPadding = newer;
-        widget.showAnimationListener?.call(newer, true);
+      // iOS/其他平台：如果当前已经等于目标值，直接完成。
+      // Android：不信任原生目标值，交给 didChangeMetrics + settle timer 收尾。
+      if (!_isAndroid && _isCloseTo(_bottomPadding, newer)) {
+        final double finalHeight = _resolveFinalHeight(newer);
+        _formerHeight = finalHeight;
+        _bottomPadding = finalHeight;
+        widget.showAnimationListener?.call(finalHeight, true);
         _finishMetricsSequenceIfMatch(token);
-        return;
       }
-
-      _showAnimationController?.forward().then((_) {
-        if (!mounted) {
-          return;
-        }
-        if (widget.animationMode != KeyboardAnimationMode.mediaQuery) {
-          return;
-        }
-        if (_activeMetricsSequence != token) {
-          return;
-        }
-        if (_metricsDrivingType != KeyboardAnimationType.show) {
-          return;
-        }
-        if (_metricsTargetHeight != newer) {
-          return;
-        }
-
-        // 兜底保证：控制器完成时，最终一定以 newer 收尾。
-        if (_formerHeight != newer) {
-          _formerHeight = newer;
-          _bottomPadding = newer;
-          widget.showAnimationListener?.call(newer, false);
-        }
-        widget.showAnimationListener?.call(newer, true);
-        _finishMetricsSequenceIfMatch(token);
-      });
       return;
     }
 
@@ -610,41 +657,15 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       _formerHeight = _bottomPadding;
       widget.hideAnimationListener?.call(_formerHeight, false);
 
-      // 如果当前已经等于目标值，直接完成，并保证最终值就是 newer。
-      if (_isCloseTo(_bottomPadding, newer)) {
-        _formerHeight = newer;
-        _bottomPadding = newer;
-        widget.hideAnimationListener?.call(newer, true);
+      // iOS/其他平台：如果当前已经等于目标值，直接完成。
+      // Android：不信任原生目标值，交给 didChangeMetrics + settle timer 收尾。
+      if (!_isAndroid && _isCloseTo(_bottomPadding, newer)) {
+        final double finalHeight = _resolveFinalHeight(newer);
+        _formerHeight = finalHeight;
+        _bottomPadding = finalHeight;
+        widget.hideAnimationListener?.call(finalHeight, true);
         _finishMetricsSequenceIfMatch(token);
-        return;
       }
-
-      _hideAnimationController?.forward().then((_) {
-        if (!mounted) {
-          return;
-        }
-        if (widget.animationMode != KeyboardAnimationMode.mediaQuery) {
-          return;
-        }
-        if (_activeMetricsSequence != token) {
-          return;
-        }
-        if (_metricsDrivingType != KeyboardAnimationType.hide) {
-          return;
-        }
-        if (_metricsTargetHeight != newer) {
-          return;
-        }
-
-        // 兜底保证：控制器完成时，最终一定以 newer 收尾。
-        if (_formerHeight != newer) {
-          _formerHeight = newer;
-          _bottomPadding = newer;
-          widget.hideAnimationListener?.call(newer, false);
-        }
-        widget.hideAnimationListener?.call(newer, true);
-        _finishMetricsSequenceIfMatch(token);
-      });
       return;
     }
 
@@ -682,7 +703,8 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       return;
     }
 
-    // 所有 change 状态下，都先缓存最新 bottom inset
+    // 所有 change 状态下，都先缓存最新 bottom inset。
+    // 若 native 事件晚于 metrics 到达，后续会以当前这一帧的 _bottomPadding 作为起点继续。
     final view = View.of(context);
     final inset = view.viewInsets.bottom / view.devicePixelRatio;
     _bottomPadding = inset;
@@ -711,17 +733,26 @@ class _KeyboardObserverState extends State<KeyboardObserver>
       }
     }
 
+    if (_isAndroid) {
+      // Android：不信任原生目标值作为最终值。
+      // 每次 metrics 变化后重启稳定检测；一段时间内不再变化则结束。
+      _restartAndroidMetricsSettleTimer(activeToken);
+      return;
+    }
+
+    // iOS / 其他平台：仍以原生目标值为主，接近目标值时结束。
     if (_isCloseTo(_bottomPadding, targetHeight)) {
+      final double finalHeight = _resolveFinalHeight(targetHeight);
       switch (drivingType) {
         case KeyboardAnimationType.show:
-          _formerHeight = targetHeight;
-          _bottomPadding = targetHeight;
-          widget.showAnimationListener?.call(targetHeight, true);
+          _formerHeight = finalHeight;
+          _bottomPadding = finalHeight;
+          widget.showAnimationListener?.call(finalHeight, true);
           break;
         case KeyboardAnimationType.hide:
-          _formerHeight = targetHeight;
-          _bottomPadding = targetHeight;
-          widget.hideAnimationListener?.call(targetHeight, true);
+          _formerHeight = finalHeight;
+          _bottomPadding = finalHeight;
+          widget.hideAnimationListener?.call(finalHeight, true);
           break;
       }
       _finishMetricsSequenceIfMatch(activeToken);

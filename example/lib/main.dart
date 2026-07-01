@@ -65,7 +65,7 @@ class _MyAppState extends State<MyApp> {
             height: double.infinity,
             decoration: BoxDecoration(
               color: Colors.red,
-              border: Border.all(color: Colors.blue,width: 1),
+              border: Border.all(color: Colors.blue, width: 1),
             ),
             alignment: Alignment.bottomCenter,
             child: Container(
