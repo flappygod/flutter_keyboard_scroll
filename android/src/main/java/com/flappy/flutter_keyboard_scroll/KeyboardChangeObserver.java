@@ -150,9 +150,15 @@ class KeyboardChangeObserver implements ViewTreeObserver.OnGlobalLayoutListener 
      * destroy
      */
     public void destroy() {
+        mKeyboardListener = null;
         if (mContentView != null) {
-            mContentView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+            ViewTreeObserver observer = mContentView.getViewTreeObserver();
+            if (observer.isAlive()) {
+                observer.removeOnGlobalLayoutListener(this);
+            }
         }
+        mContentView = null;
+        mWindow = null;
     }
 
 

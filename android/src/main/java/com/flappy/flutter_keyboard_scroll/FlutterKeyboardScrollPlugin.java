@@ -17,121 +17,141 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 
-/** FlutterKeyboardScrollPlugin */
+/**
+ * FlutterKeyboardScrollPlugin
+ */
 public class FlutterKeyboardScrollPlugin implements FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler, ActivityAware {
-  /// The MethodChannel that will the communication between Flutter and native Android
-  ///
-  /// This local reference serves to register the plugin with the Flutter Engine and unregister it
-  /// when the Flutter Engine is detached from the Activity
-  private MethodChannel channel;
+    /// The MethodChannel that will the communication between Flutter and native Android
+    ///
+    /// This local reference serves to register the plugin with the Flutter Engine and unregister it
+    /// when the Flutter Engine is detached from the Activity
+    private MethodChannel channel;
 
-  //event channel
-  private EventChannel eventChannel;
+    //event channel
+    private EventChannel eventChannel;
 
-  //set activity
-  private Activity activity;
+    //set activity
+    private Activity activity;
 
-  //listener
-  private KeyboardChangeObserver keyboardChangeListener;
+    //listener
+    private KeyboardChangeObserver keyboardChangeListener;
 
-  //event sink
-  private EventChannel.EventSink eventSink;
+    //event sink
+    private EventChannel.EventSink eventSink;
 
 
-  @Override
-  public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
-    channel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), "keyboard_observer");
-    eventChannel = new EventChannel(flutterPluginBinding.getBinaryMessenger(), "keyboard_observer_event");
-    channel.setMethodCallHandler(this);
-    eventChannel.setStreamHandler(this);
-  }
-
-  @Override
-  public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
-    result.notImplemented();
-  }
-
-  @Override
-  public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
-    channel.setMethodCallHandler(null);
-  }
-
-  @Override
-  public void onListen(Object arguments, EventChannel.EventSink events) {
-    eventSink = events;
-  }
-
-  @Override
-  public void onCancel(Object arguments) {
-    eventSink = null;
-  }
-
-  @Override
-  public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
-    setActivity(binding);
-  }
-
-  @Override
-  public void onDetachedFromActivityForConfigChanges() {
-    setActivity(null);
-  }
-
-  @Override
-  public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
-    setActivity(binding);
-  }
-
-  @Override
-  public void onDetachedFromActivity() {
-    setActivity(null);
-  }
-
-  float density = 0;
-
-  void setActivity(ActivityPluginBinding binding) {
-    if (binding == null) {
-      activity = null;
-      return;
+    @Override
+    public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
+        channel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), "keyboard_observer");
+        eventChannel = new EventChannel(flutterPluginBinding.getBinaryMessenger(), "keyboard_observer_event");
+        channel.setMethodCallHandler(this);
+        eventChannel.setStreamHandler(this);
     }
-    activity = binding.getActivity();
-    keyboardChangeListener = new KeyboardChangeObserver(activity);
-    keyboardChangeListener.setKeyboardListener(new KeyboardListener() {
 
-      private String lastKeyboardDpStr = "0.00";
+    @Override
+    public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
+        result.notImplemented();
+    }
 
-      @Override
-      public void onKeyboardChange(boolean isShow, int keyboardHeightPx) {
-        //不为空
-        if (eventSink == null) {
-          return;
+    @Override
+    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        if (channel != null) {
+            channel.setMethodCallHandler(null);
         }
-        //Density
-        if (density == 0.0) {
-          density = activity.getResources().getDisplayMetrics().density;
-          if (density == 0.0) {
+        if (eventChannel != null) {
+            eventChannel.setStreamHandler(null);
+        }
+        clearKeyboardListener();
+        eventSink = null;
+    }
+
+    @Override
+    public void onListen(Object arguments, EventChannel.EventSink events) {
+        eventSink = events;
+    }
+
+    @Override
+    public void onCancel(Object arguments) {
+        eventSink = null;
+    }
+
+    @Override
+    public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
+        setActivity(binding);
+    }
+
+    @Override
+    public void onDetachedFromActivityForConfigChanges() {
+        setActivity(null);
+    }
+
+    @Override
+    public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
+        setActivity(binding);
+    }
+
+    @Override
+    public void onDetachedFromActivity() {
+        setActivity(null);
+    }
+
+    float density = 0;
+
+    private void clearKeyboardListener() {
+        if (keyboardChangeListener != null) {
+            keyboardChangeListener.destroy();
+            keyboardChangeListener = null;
+        }
+    }
+
+    void setActivity(ActivityPluginBinding binding) {
+        // 先释放旧 listener，避免重复注册
+        clearKeyboardListener();
+
+        if (binding == null) {
+            activity = null;
             return;
-          }
         }
-        BigDecimal px = BigDecimal.valueOf(keyboardHeightPx);
-        BigDecimal den = new BigDecimal(String.valueOf(density));
-        BigDecimal dp = px.divide(den, 2, RoundingMode.HALF_UP);
-        String dpStr = dp.toPlainString();
-        HashMap<String, Object> map = new HashMap<>();
-        if (isShow) {
-          lastKeyboardDpStr = dpStr;
-          map.put("type", 2);
-          map.put("former", "0.00");
-          map.put("newer", dpStr);
-          map.put("time", System.currentTimeMillis());
-        } else {
-          map.put("type", 3);
-          map.put("former", lastKeyboardDpStr);
-          map.put("newer", "0.00");
-          map.put("time", System.currentTimeMillis());
-        }
-        eventSink.success(map);
-      }
-    });
-  }
+
+        activity = binding.getActivity();
+        keyboardChangeListener = new KeyboardChangeObserver(activity);
+        keyboardChangeListener.setKeyboardListener(new KeyboardListener() {
+
+            private String lastKeyboardDpStr = "0.00";
+
+            @Override
+            public void onKeyboardChange(boolean isShow, int keyboardHeightPx) {
+                //不为空
+                if (eventSink == null || activity == null) {
+                    return;
+                }
+                //Density
+                if (density == 0.0) {
+                    density = activity.getResources().getDisplayMetrics().density;
+                    if (density == 0.0) {
+                        return;
+                    }
+                }
+                BigDecimal px = BigDecimal.valueOf(keyboardHeightPx);
+                BigDecimal den = new BigDecimal(String.valueOf(density));
+                BigDecimal dp = px.divide(den, 2, RoundingMode.HALF_UP);
+                String dpStr = dp.toPlainString();
+                HashMap<String, Object> map = new HashMap<>();
+                if (isShow) {
+                    lastKeyboardDpStr = dpStr;
+                    map.put("type", 2);
+                    map.put("former", "0.00");
+                    map.put("newer", dpStr);
+                    map.put("time", System.currentTimeMillis());
+                } else {
+                    map.put("type", 3);
+                    map.put("former", lastKeyboardDpStr);
+                    map.put("newer", "0.00");
+                    map.put("time", System.currentTimeMillis());
+                }
+                eventSink.success(map);
+            }
+        });
+    }
 
 }
